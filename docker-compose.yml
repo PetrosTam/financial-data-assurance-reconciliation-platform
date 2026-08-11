@@ -26,6 +26,7 @@ services:
       TZ: Europe/Nicosia
       GENERIC_TIMEZONE: Europe/Nicosia
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      N8N_RUNNERS_ENABLED: "true"
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:
