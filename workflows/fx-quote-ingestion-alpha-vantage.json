@@ -8,7 +8,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        448,
+        464,
         0
       ],
       "id": "70944957-5d4c-485f-a2ab-ee1767ce2d40",
@@ -166,6 +166,7 @@
       ],
       "id": "b9253139-8ce8-4dd0-a123-14595397d8a3",
       "name": "Persist Quote to PostgreSQL",
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
@@ -178,8 +179,8 @@
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        0,
-        0
+        -176,
+        96
       ],
       "id": "fc7952e7-6be7-4a3d-8030-c6a4eba4481a",
       "name": "Manual Trigger"
@@ -211,7 +212,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        224,
+        240,
         0
       ],
       "id": "36e23cb2-8d94-4df5-9f6f-08bbc5e167c8",
@@ -237,11 +238,257 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
-        0,
-        -176
+        -176,
+        -128
       ],
       "id": "e65b9d72-0fb6-423b-9b6c-65c2e48e7b98",
       "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "workflow_runs",
+          "mode": "list",
+          "cachedResultName": "workflow_runs"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "records_processed": 0,
+            "workflow_name": "={{ $workflow.name }}",
+            "execution_id": "={{ $execution.id }}",
+            "status": "started"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "workflow_name",
+              "displayName": "workflow_name",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "records_processed",
+              "displayName": "records_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "finished_at",
+              "displayName": "finished_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        32,
+        0
+      ],
+      "id": "a7e4dad9-ed1d-4ced-8e3f-a6ce23a889c6",
+      "name": "Log Run Started",
+      "credentials": {
+        "postgres": {
+          "id": "5JJ2CC2NS9rUYWmZ",
+          "name": "FX Ops PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "workflow_runs",
+          "mode": "list",
+          "cachedResultName": "workflow_runs"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "records_processed": "={{ $json.id !== undefined ? 1 : 0 }}",
+            "execution_id": "={{ $execution.id }}",
+            "status": "success",
+            "finished_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "execution_id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "workflow_name",
+              "displayName": "workflow_name",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "records_processed",
+              "displayName": "records_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "finished_at",
+              "displayName": "finished_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        896,
+        0
+      ],
+      "id": "98aa7b7f-2f8e-40bc-84c6-f9445e73a9db",
+      "name": "Mark Run Success",
+      "credentials": {
+        "postgres": {
+          "id": "5JJ2CC2NS9rUYWmZ",
+          "name": "FX Ops PostgreSQL"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -261,7 +508,7 @@
       "main": [
         [
           {
-            "node": "Fetch EURUSD Quote",
+            "node": "Log Run Started",
             "type": "main",
             "index": 0
           }
@@ -283,6 +530,28 @@
       "main": [
         [
           {
+            "node": "Log Run Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Quote to PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Mark Run Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Run Started": {
+      "main": [
+        [
+          {
             "node": "Fetch EURUSD Quote",
             "type": "main",
             "index": 0
@@ -294,9 +563,14 @@
   "active": true,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Nicosia",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "B6S0q1cyyRWe5V3n"
   },
-  "versionId": "89b7aa91-9574-4be1-950d-3bb49fde1e81",
+  "versionId": "cdd58c61-6e4a-4bdb-b9cb-ceb359f57d4d",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "e0cfd3455c618dae5c928e5689f8c48e896705e324884dcb688a94501a2d3b9e"
