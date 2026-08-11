@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: fxops-postgres
+    environment:
+      POSTGRES_USER: fxops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: fxops
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fxops -d fxops"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: fxops-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      TZ: Europe/Nicosia
+      GENERIC_TIMEZONE: Europe/Nicosia
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  n8n_data:
