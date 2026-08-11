@@ -162,7 +162,7 @@
       "typeVersion": 2.7,
       "position": [
         672,
-        0
+        -208
       ],
       "id": "b9253139-8ce8-4dd0-a123-14595397d8a3",
       "name": "Persist Quote to PostgreSQL",
@@ -478,11 +478,174 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        896,
-        0
+        880,
+        -208
       ],
       "id": "98aa7b7f-2f8e-40bc-84c6-f9445e73a9db",
       "name": "Mark Run Success",
+      "credentials": {
+        "postgres": {
+          "id": "5JJ2CC2NS9rUYWmZ",
+          "name": "FX Ops PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst WIDE_SPREAD_BPS_THRESHOLD = 2.0;\nconst CRITICAL_SPREAD_BPS_THRESHOLD = 5.0;\n\nconst STALE_QUOTE_SECONDS_THRESHOLD = 600;\nconst CRITICAL_STALE_SECONDS_THRESHOLD = 1800;\n\nconst anomalies = [];\n\nfor (const item of items) {\n    const quote = item.json;\n\n    const symbol = quote.symbol;\n    const bid = Number(quote.bid);\n    const ask = Number(quote.ask);\n    const midPrice = Number(quote.mid_price);\n    const spread = Number(quote.spread);\n    const observedAt = new Date(quote.observed_at);\n\n    // Wide spread check\n    const spreadBps = (spread / midPrice) * 10000;\n\n    if (spreadBps > WIDE_SPREAD_BPS_THRESHOLD) {\n        anomalies.push({\n            json: {\n                symbol,\n                anomaly_type: 'wide_spread',\n                severity:\n                    spreadBps > CRITICAL_SPREAD_BPS_THRESHOLD\n                        ? 'critical'\n                        : 'warning',\n                metric_value: Number(spreadBps.toFixed(8)),\n                threshold_value: WIDE_SPREAD_BPS_THRESHOLD,\n                details: {\n                    bid,\n                    ask,\n                    mid_price: midPrice,\n                    spread,\n                    spread_bps: Number(spreadBps.toFixed(8)),\n                    source: quote.source,\n                    observed_at: quote.observed_at\n                }\n            }\n        });\n    }\n\n    // Stale quote check\n    const quoteAgeSeconds =\n        (Date.now() - observedAt.getTime()) / 1000;\n\n    if (\n        Number.isFinite(quoteAgeSeconds) &&\n        quoteAgeSeconds > STALE_QUOTE_SECONDS_THRESHOLD\n    ) {\n        anomalies.push({\n            json: {\n                symbol,\n                anomaly_type: 'stale_quote',\n                severity:\n                    quoteAgeSeconds > CRITICAL_STALE_SECONDS_THRESHOLD\n                        ? 'critical'\n                        : 'warning',\n                metric_value: Number(quoteAgeSeconds.toFixed(8)),\n                threshold_value: STALE_QUOTE_SECONDS_THRESHOLD,\n                details: {\n                    quote_age_seconds: Math.round(quoteAgeSeconds),\n                    observed_at: quote.observed_at,\n                    source: quote.source\n                }\n            }\n        });\n    }\n}\n\nreturn anomalies;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "a089b498-e5b6-478e-8e63-9d1d9f494b79",
+      "name": "Detect Operational Anomalies"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "anomalies",
+          "mode": "list",
+          "cachedResultName": "anomalies"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "id": 0,
+            "metric_value": 0,
+            "threshold_value": 0
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "symbol",
+              "displayName": "symbol",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "anomaly_type",
+              "displayName": "anomaly_type",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "severity",
+              "displayName": "severity",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "metric_value",
+              "displayName": "metric_value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "threshold_value",
+              "displayName": "threshold_value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "details",
+              "displayName": "details",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detected_at",
+              "displayName": "detected_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resolved_at",
+              "displayName": "resolved_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        880,
+        96
+      ],
+      "id": "ab2ddca4-42bb-4025-bae1-78bad79d7bf1",
+      "name": "Log Anomaly",
+      "credentials": {
+        "postgres": {
+          "id": "5JJ2CC2NS9rUYWmZ",
+          "name": "FX Ops PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH previous_quote AS (\n    SELECT\n        mid_price,\n        observed_at\n    FROM fx_quotes\n    WHERE symbol = $1\n      AND observed_at < $2::timestamptz\n    ORDER BY observed_at DESC\n    LIMIT 1\n)\nSELECT\n    $1::text AS symbol,\n    'extreme_price_movement'::text AS anomaly_type,\n\n    CASE\n        WHEN ABS(($3::numeric - mid_price) / mid_price) * 10000 > 50\n            THEN 'critical'\n        ELSE 'warning'\n    END AS severity,\n\n    ROUND(\n        ABS(($3::numeric - mid_price) / mid_price) * 10000,\n        8\n    ) AS metric_value,\n\n    20.0::numeric AS threshold_value,\n\n    jsonb_build_object(\n        'previous_mid_price', mid_price,\n        'current_mid_price', $3::numeric,\n        'movement_bps',\n            ROUND(\n                ABS(($3::numeric - mid_price) / mid_price) * 10000,\n                8\n            ),\n        'previous_observed_at', observed_at,\n        'current_observed_at', $2::timestamptz\n    ) AS details\n\nFROM previous_quote\n\nWHERE\n    ABS(($3::numeric - mid_price) / mid_price) * 10000 > 20;",
+        "options": {
+          "queryReplacement": "={{ $json.symbol }}, {{ $json.observed_at }}, {{ $json.mid_price }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        672,
+        176
+      ],
+      "id": "0b9d52af-3dcb-4612-b1c5-2e70557a39b5",
+      "name": "Check Price Movement",
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
@@ -497,7 +660,17 @@
       "main": [
         [
           {
+            "node": "Detect Operational Anomalies",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "Persist Quote to PostgreSQL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Price Movement",
             "type": "main",
             "index": 0
           }
@@ -558,6 +731,33 @@
           }
         ]
       ]
+    },
+    "Detect Operational Anomalies": {
+      "main": [
+        [
+          {
+            "node": "Log Anomaly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Anomaly": {
+      "main": [
+        []
+      ]
+    },
+    "Check Price Movement": {
+      "main": [
+        [
+          {
+            "node": "Log Anomaly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -570,7 +770,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "errorWorkflow": "B6S0q1cyyRWe5V3n"
   },
-  "versionId": "cdd58c61-6e4a-4bdb-b9cb-ceb359f57d4d",
+  "versionId": "f91094d4-e62a-44a2-9e4e-c87231be7093",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "e0cfd3455c618dae5c928e5689f8c48e896705e324884dcb688a94501a2d3b9e"
