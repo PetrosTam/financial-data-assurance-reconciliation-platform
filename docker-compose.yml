@@ -23,8 +23,8 @@ services:
     ports:
       - "5678:5678"
     environment:
-      TZ: Europe/Nicosia
-      GENERIC_TIMEZONE: Europe/Nicosia
+      TZ: Asia/Nicosia
+      GENERIC_TIMEZONE: Asia/Nicosia
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
       N8N_RUNNERS_ENABLED: "true"
     volumes:
