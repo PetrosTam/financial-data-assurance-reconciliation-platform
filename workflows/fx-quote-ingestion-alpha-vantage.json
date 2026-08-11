@@ -1,0 +1,274 @@
+{
+  "name": "FX Quote Ingestion - Alpha Vantage",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map((item) => {\n    const payload = item.json;\n    const rate = payload['Realtime Currency Exchange Rate'];\n\n    // Validate that Alpha Vantage returned the expected response\n    if (!rate) {\n        const apiMessage =\n            payload['Error Message'] ||\n            payload['Information'] ||\n            payload['Note'] ||\n            'Missing Realtime Currency Exchange Rate data';\n\n        throw new Error(`Invalid Alpha Vantage response: ${apiMessage}`);\n    }\n\n    const fromCurrency = rate['1. From_Currency Code'];\n    const toCurrency = rate['3. To_Currency Code'];\n    const bid = Number(rate['8. Bid Price']);\n    const ask = Number(rate['9. Ask Price']);\n    const lastRefreshed = rate['6. Last Refreshed'];\n\n    // Validate required fields\n    if (!fromCurrency || !toCurrency) {\n        throw new Error('Missing currency code in Alpha Vantage response');\n    }\n\n    if (!Number.isFinite(bid) || !Number.isFinite(ask)) {\n        throw new Error('Bid or ask price is not a valid number');\n    }\n\n    if (bid <= 0 || ask <= 0) {\n        throw new Error('Bid and ask prices must be greater than zero');\n    }\n\n    if (ask < bid) {\n        throw new Error(`Invalid quote: ask (${ask}) is lower than bid (${bid})`);\n    }\n\n    if (!lastRefreshed) {\n        throw new Error('Missing quote timestamp');\n    }\n\n    const observedAt = new Date(\n        lastRefreshed.replace(' ', 'T') + 'Z'\n    );\n\n    if (Number.isNaN(observedAt.getTime())) {\n        throw new Error(`Invalid quote timestamp: ${lastRefreshed}`);\n    }\n\n    // Normalize provider-specific data into the internal FX schema\n    const midPrice = Number(((bid + ask) / 2).toFixed(8));\n    const spread = Number((ask - bid).toFixed(8));\n\n    return {\n        json: {\n            symbol: `${fromCurrency}${toCurrency}`,\n            provider_instrument_id: null,\n            bid,\n            ask,\n            mid_price: midPrice,\n            spread,\n            source: 'alpha-vantage',\n            observed_at: observedAt.toISOString(),\n            raw_payload: payload\n        }\n    };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "70944957-5d4c-485f-a2ab-ee1767ce2d40",
+      "name": "Validate & Normalize Quote"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "fx_quotes",
+          "mode": "list",
+          "cachedResultName": "fx_quotes"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "id": 0,
+            "bid": 0,
+            "ask": 0,
+            "mid_price": 0,
+            "spread": 0
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "symbol",
+              "displayName": "symbol",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "provider_instrument_id",
+              "displayName": "provider_instrument_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bid",
+              "displayName": "bid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ask",
+              "displayName": "ask",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "mid_price",
+              "displayName": "mid_price",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "spread",
+              "displayName": "spread",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "observed_at",
+              "displayName": "observed_at",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "raw_payload",
+              "displayName": "raw_payload",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        672,
+        0
+      ],
+      "id": "b9253139-8ce8-4dd0-a123-14595397d8a3",
+      "name": "Persist Quote to PostgreSQL",
+      "credentials": {
+        "postgres": {
+          "id": "5JJ2CC2NS9rUYWmZ",
+          "name": "FX Ops PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fc7952e7-6be7-4a3d-8030-c6a4eba4481a",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://www.alphavantage.co/query",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "function",
+              "value": "CURRENCY_EXCHANGE_RATE"
+            },
+            {
+              "name": "from_currency",
+              "value": "EUR"
+            },
+            {
+              "name": "to_currency",
+              "value": "USD"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "36e23cb2-8d94-4df5-9f6f-08bbc5e167c8",
+      "name": "Fetch EURUSD Quote",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "xuG1q5j3ldGFkKzS",
+          "name": "Alpha Vantage API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Validate & Normalize Quote": {
+      "main": [
+        [
+          {
+            "node": "Persist Quote to PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch EURUSD Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch EURUSD Quote": {
+      "main": [
+        [
+          {
+            "node": "Validate & Normalize Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "fee214da-6f45-44fa-af20-438d1953d10f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e0cfd3455c618dae5c928e5689f8c48e896705e324884dcb688a94501a2d3b9e"
+  },
+  "nodeGroups": [],
+  "id": "m6r8ZGmjFiLuBDuY",
+  "tags": []
+}
