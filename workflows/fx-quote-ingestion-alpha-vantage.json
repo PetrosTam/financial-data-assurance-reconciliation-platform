@@ -1,5 +1,5 @@
 {
-  "name": "FX Quote Ingestion - Alpha Vantage",
+  "name": "Multi-Instrument FX Operations Pipeline - Alpha Vantage",
   "nodes": [
     {
       "parameters": {
@@ -8,8 +8,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        464,
-        0
+        864,
+        -208
       ],
       "id": "70944957-5d4c-485f-a2ab-ee1767ce2d40",
       "name": "Validate & Normalize Quote"
@@ -161,7 +161,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        672,
+        1344,
         -208
       ],
       "id": "b9253139-8ce8-4dd0-a123-14595397d8a3",
@@ -187,49 +187,11 @@
     },
     {
       "parameters": {
-        "url": "https://www.alphavantage.co/query",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "function",
-              "value": "CURRENCY_EXCHANGE_RATE"
-            },
-            {
-              "name": "from_currency",
-              "value": "EUR"
-            },
-            {
-              "name": "to_currency",
-              "value": "USD"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        240,
-        0
-      ],
-      "id": "36e23cb2-8d94-4df5-9f6f-08bbc5e167c8",
-      "name": "Fetch EURUSD Quote",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "xuG1q5j3ldGFkKzS",
-          "name": "Alpha Vantage API"
-        }
-      }
-    },
-    {
-      "parameters": {
         "rule": {
           "interval": [
             {
               "field": "hours",
+              "hoursInterval": 4,
               "triggerAtMinute": 5
             }
           ]
@@ -383,7 +345,7 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "records_processed": "={{ $json.id !== undefined ? 1 : 0 }}",
+            "records_processed": "={{ $(\"Validate & Normalize Quote\").all().length }}",
             "execution_id": "={{ $execution.id }}",
             "status": "success",
             "finished_at": "={{ $now.toISO() }}"
@@ -478,11 +440,12 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        880,
+        1552,
         -208
       ],
       "id": "98aa7b7f-2f8e-40bc-84c6-f9445e73a9db",
       "name": "Mark Run Success",
+      "executeOnce": true,
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
@@ -497,7 +460,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        672,
+        1344,
         0
       ],
       "id": "a089b498-e5b6-478e-8e63-9d1d9f494b79",
@@ -618,7 +581,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        880,
+        1552,
         96
       ],
       "id": "ab2ddca4-42bb-4025-bae1-78bad79d7bf1",
@@ -641,7 +604,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        672,
+        1344,
         176
       ],
       "id": "0b9d52af-3dcb-4612-b1c5-2e70557a39b5",
@@ -652,6 +615,85 @@
           "name": "FX Ops PostgreSQL"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      from_currency: 'EUR',\n      to_currency: 'USD'\n    }\n  },\n  {\n    json: {\n      from_currency: 'GBP',\n      to_currency: 'USD'\n    }\n  },\n  {\n    json: {\n      from_currency: 'USD',\n      to_currency: 'JPY'\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        0
+      ],
+      "id": "5beada0f-b1d0-43d9-a319-1ec06300c165",
+      "name": "Generate FX Pairs"
+    },
+    {
+      "parameters": {
+        "url": "https://www.alphavantage.co/query",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "function",
+              "value": "CURRENCY_EXCHANGE_RATE"
+            },
+            {
+              "name": "from_currency",
+              "value": "={{ $json.from_currency }}"
+            },
+            {
+              "name": "to_currency",
+              "value": "={{ $json.to_currency }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        16
+      ],
+      "id": "36e23cb2-8d94-4df5-9f6f-08bbc5e167c8",
+      "name": "Fetch FX Quote",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "xuG1q5j3ldGFkKzS",
+          "name": "Alpha Vantage API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        496,
+        0
+      ],
+      "id": "e0ebb7b4-e712-4c4f-ba2d-8464fdd58b03",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        192
+      ],
+      "id": "32179d7c-52e5-4b24-8bb1-ec625a170af2",
+      "name": "Wait",
+      "webhookId": "8712cf98-5ecd-4943-9cc1-891f3fcc1eb9"
     }
   ],
   "pinData": {},
@@ -688,17 +730,6 @@
         ]
       ]
     },
-    "Fetch EURUSD Quote": {
-      "main": [
-        [
-          {
-            "node": "Validate & Normalize Quote",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Schedule Trigger": {
       "main": [
         [
@@ -725,7 +756,7 @@
       "main": [
         [
           {
-            "node": "Fetch EURUSD Quote",
+            "node": "Generate FX Pairs",
             "type": "main",
             "index": 0
           }
@@ -758,6 +789,57 @@
           }
         ]
       ]
+    },
+    "Generate FX Pairs": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch FX Quote": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Validate & Normalize Quote",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch FX Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -770,7 +852,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "errorWorkflow": "B6S0q1cyyRWe5V3n"
   },
-  "versionId": "f91094d4-e62a-44a2-9e4e-c87231be7093",
+  "versionId": "a082bb3a-072e-44a8-a1eb-46d7d67d05c6",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "e0cfd3455c618dae5c928e5689f8c48e896705e324884dcb688a94501a2d3b9e"
