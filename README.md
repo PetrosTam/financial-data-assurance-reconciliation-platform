@@ -1,139 +1,592 @@
 # FX Operations Automation & Monitoring
 
-An FX operations automation and monitoring system for ingesting, validating, normalizing, storing, and monitoring foreign exchange market data and operational workflows.
+An automated FX operations, data-quality, and workflow-monitoring system built with n8n, JavaScript, REST APIs, PostgreSQL, and Docker.
 
 ## Overview
 
-The system integrates external FX market data through REST APIs and processes it through automated n8n workflows.
+This project implements an automated multi-instrument FX data pipeline designed around operational reliability, data quality, monitoring, and fault handling.
 
-Incoming market data is validated and normalized into a provider-independent internal format before being persisted to PostgreSQL.
+The system retrieves foreign-exchange market data from an external REST API, validates and normalizes provider-specific responses, stores structured quotes in PostgreSQL, performs automated operational anomaly checks, and tracks the complete lifecycle of each workflow execution.
 
-The platform also monitors workflow executions, records successful and failed runs, performs automated operational data-quality checks, detects abnormal market-data conditions, and stores structured anomaly records for investigation.
+The current pipeline processes multiple FX instruments:
 
-The project is being developed with a focus on data quality, reliability, workflow observability, automated operational controls, fault handling, and system monitoring.
+- EUR/USD
+- GBP/USD
+- USD/JPY
+
+The project is designed around several operational principles:
+
+- Reduce manual processing through automation
+- Validate incoming structured data before persistence
+- Normalize provider-specific responses into a common internal model
+- Monitor workflow execution health
+- Detect operational and market-data anomalies
+- Persist diagnostic information for investigation
+- Handle production failures centrally
+- Respect third-party API rate limits
+- Keep sensitive credentials outside source control
+
+---
 
 ## Current Architecture
 
-### FX Quote Ingestion and Monitoring Workflow
+### Multi-Instrument FX Operations Pipeline
 
-    Manual Trigger ─────────┐
-                            │
-    Schedule Trigger ───────┤
-                            v
-                     Log Run Started
-                            |
-                            v
-                  Alpha Vantage REST API
-                            |
-                            v
-              JavaScript Validation & Normalization
-                            |
-             ┌──────────────┼──────────────────────┐
-             |              |                      |
-             v              v                      v
-       Persist Quote   Detect Operational     Check Previous
-       to PostgreSQL      Anomalies          Price Movement
-             |              |                      |
-             v              └──────────┬───────────┘
-      Mark Run Success                 |
-                                       v
-                                  Log Anomaly
-                                       |
-                                       v
-                                  PostgreSQL
+```text
+Manual Trigger ──────────────┐
+                             │
+Schedule Trigger ────────────┤
+                             v
+                      Log Run Started
+                             |
+                             v
+                     Generate FX Pairs
+                             |
+                             v
+                     Loop Over Items
+                     Batch Size = 1
+                             |
+                         loop output
+                             |
+                             v
+                       Fetch FX Quote
+                             |
+                             v
+                         Wait 3 sec
+                             |
+                             └──────────────→ Loop Over Items
 
-### Failure Handling Workflow
+                     done output
+                             |
+                             v
+                  Validate & Normalize Quote
+                             |
+              ┌──────────────┼──────────────────────┐
+              |              |                      |
+              v              v                      v
+        Persist Quote   Detect Operational     Check Previous
+        to PostgreSQL      Anomalies          Price Movement
+              |              |                      |
+              v              └──────────┬───────────┘
+       Mark Run Success                 |
+                                        v
+                                   Log Anomaly
+                                        |
+                                        v
+                                   PostgreSQL
+```
 
-    Production Workflow Failure
-               |
-               v
-          Error Trigger
-               |
-               v
-         Mark Run Failed
-               |
-               v
-          PostgreSQL
+### Production Failure Handling
 
-The ingestion workflow retrieves EUR/USD market data from Alpha Vantage, validates the provider response, transforms provider-specific fields into an internal FX data model, calculates derived pricing metrics, and persists normalized quotes to PostgreSQL.
+```text
+Production Workflow Failure
+            |
+            v
+       Error Trigger
+            |
+            v
+      Mark Run Failed
+            |
+            v
+       PostgreSQL
+```
 
-Each workflow execution is registered in the `workflow_runs` table when it begins.
-
-Successful executions update the corresponding run with completion status, processed-record count, and completion timestamp.
-
-Production failures are routed to a dedicated error-handling workflow that records the failure status, error message, and completion timestamp against the original execution.
-
-Validated quotes are also evaluated by independent operational monitoring branches. These checks can identify wide spreads, stale market data, and extreme price movements without interrupting normal quote persistence.
+---
 
 ## Implemented Features
 
-### FX Market Data Ingestion
+### Multi-Instrument FX Ingestion
 
-- EUR/USD market data ingestion through the Alpha Vantage REST API
-- Hourly scheduled FX quote ingestion using n8n
-- Manual workflow execution for development and testing
-- Secure API authentication using n8n credentials
-- Provider-independent FX data normalization
-- PostgreSQL persistence
-- Raw provider payload retention for traceability and debugging
+The pipeline currently retrieves and processes:
 
-### Data Validation
+```text
+EUR/USD
+GBP/USD
+USD/JPY
+```
 
+FX pairs are generated dynamically by the `Generate FX Pairs` node rather than being hardcoded inside the HTTP request.
+
+Each generated item contains:
+
+```text
+from_currency
+to_currency
+```
+
+The same HTTP integration therefore works for multiple FX instruments.
+
+### Sequential API Processing
+
+The system processes external API requests sequentially using:
+
+```text
+Generate FX Pairs
+      ↓
+Loop Over Items
+      ↓
+Fetch FX Quote
+      ↓
+Wait
+      ↓
+Loop Over Items
+```
+
+`Loop Over Items` uses:
+
+```text
+Batch Size = 1
+```
+
+and the `Wait` node introduces a three-second delay between requests.
+
+This prevents the workflow from sending all instrument requests simultaneously and provides explicit rate-limit control for the external API integration.
+
+### Scheduled Automation
+
+The production workflow is configured to execute automatically every four hours.
+
+With three FX instruments, each scheduled run performs three external market-data requests.
+
+Manual execution remains available for development and controlled testing.
+
+---
+
+## External API Integration
+
+Market data is retrieved from the Alpha Vantage FX API using the:
+
+```text
+CURRENCY_EXCHANGE_RATE
+```
+
+function.
+
+The HTTP request uses dynamic parameters:
+
+```text
+from_currency = {{ $json.from_currency }}
+to_currency   = {{ $json.to_currency }}
+```
+
+This allows the same integration node to process any supported FX pair generated upstream.
+
+API authentication is stored using n8n credentials and is not embedded directly in the workflow.
+
+---
+
+## FX Data Validation and Normalization
+
+Provider-specific API responses are transformed into a common internal FX representation using JavaScript.
+
+Each normalized quote contains:
+
+```text
+symbol
+provider_instrument_id
+bid
+ask
+mid_price
+spread
+source
+observed_at
+raw_payload
+```
+
+For example:
+
+```text
+EUR + USD → EURUSD
+GBP + USD → GBPUSD
+USD + JPY → USDJPY
+```
+
+### Validation Controls
+
+The normalization layer validates:
+
+- Expected API response structure
+- Required currency codes
+- Numeric bid values
+- Numeric ask values
+- Positive market prices
+- Bid/ask consistency
+- Market observation timestamp
+- Provider error responses
+
+Invalid provider responses are rejected before reaching PostgreSQL.
+
+### Derived Metrics
+
+The workflow calculates:
+
+```text
+mid_price = (bid + ask) / 2
+```
+
+and:
+
+```text
+spread = ask - bid
+```
+
+Timestamps are normalized to UTC before persistence.
+
+---
+
+## PostgreSQL Persistence
+
+Validated quotes are stored in:
+
+```text
+fx_quotes
+```
+
+The table stores:
+
+- Symbol
+- Provider instrument identifier
+- Bid
+- Ask
+- Mid price
+- Spread
+- Source
+- Observation timestamp
+- Receipt timestamp
+- Raw provider payload
+
+### Duplicate Protection
+
+Database-level uniqueness constraints protect the system against duplicate market-data records.
+
+The persistence node also uses conflict handling so duplicate quotes can be safely skipped rather than causing the workflow to fail.
+
+This makes quote persistence idempotent.
+
+---
+
+## Workflow Execution Monitoring
+
+Every workflow run is tracked in:
+
+```text
+workflow_runs
+```
+
+### Run Start
+
+At the beginning of each execution, `Log Run Started` stores:
+
+- Workflow name
+- n8n execution ID
+- Status
+- Records processed
+- Start timestamp
+
+The initial state is:
+
+```text
+status = started
+records_processed = 0
+```
+
+### Successful Execution
+
+At the end of a successful run, `Mark Run Success` updates the corresponding execution using the n8n execution ID.
+
+The final state becomes:
+
+```text
+status = success
+records_processed = <number of normalized FX quotes>
+finished_at = <completion timestamp>
+```
+
+For the current three-instrument pipeline:
+
+```text
+records_processed = 3
+```
+
+The processed-record count is calculated dynamically from the number of normalized quote items rather than being hardcoded.
+
+`Mark Run Success` executes once per workflow execution, even when multiple FX records are processed.
+
+---
+
+## Production Failure Handling
+
+A dedicated workflow named:
+
+```text
+FX Workflow Error Handler
+```
+
+handles production failures.
+
+Architecture:
+
+```text
+Error Trigger
+      ↓
+Mark Run Failed
+```
+
+When the main production workflow fails, the error workflow receives information about the failed execution.
+
+It correlates the failure with the original `workflow_runs` row using the execution ID and updates:
+
+```text
+status = failed
+error_message = <actual failure message>
+finished_at = <failure completion timestamp>
+```
+
+This provides centralized production error handling without duplicating failure logic across individual nodes.
+
+Controlled production failures were used during development to verify the complete failure path.
+
+---
+
+## Operational Anomaly Detection
+
+Validated quotes are evaluated by monitoring branches independently of quote persistence.
+
+This means an unusual but structurally valid market-data record can still be stored while simultaneously being flagged for investigation.
+
+Current anomaly types:
+
+```text
+wide_spread
+stale_quote
+extreme_price_movement
+```
+
+Detected anomalies are persisted in:
+
+```text
+anomalies
+```
+
+---
+
+## Wide Spread Detection
+
+The system calculates the spread in basis points:
+
+```text
+spread_bps = (spread / mid_price) * 10000
+```
+
+Current initial thresholds:
+
+```text
+Warning:  2 bps
+Critical: 5 bps
+```
+
+When the configured threshold is exceeded, the workflow creates:
+
+```text
+anomaly_type = wide_spread
+```
+
+Diagnostic information includes:
+
+- Bid
+- Ask
+- Mid price
+- Absolute spread
+- Spread in basis points
+- Source
+- Observation timestamp
+
+---
+
+## Stale Quote Detection
+
+The system compares the quote observation timestamp with the current workflow time.
+
+Current initial thresholds:
+
+```text
+Warning:  600 seconds
+Critical: 1800 seconds
+```
+
+Quotes older than the configured threshold generate:
+
+```text
+anomaly_type = stale_quote
+```
+
+The anomaly stores the calculated quote age and original observation timestamp.
+
+---
+
+## Extreme Price Movement Detection
+
+The pipeline compares each current quote with the most recent earlier quote for the same FX symbol stored in PostgreSQL.
+
+The previous quote is retrieved using a parameterized SQL query.
+
+Price movement is calculated as:
+
+```text
+movement_bps =
+    abs(
+        (current_mid_price - previous_mid_price)
+        / previous_mid_price
+    ) * 10000
+```
+
+Current initial thresholds:
+
+```text
+Warning:  20 bps
+Critical: 50 bps
+```
+
+When the threshold is exceeded:
+
+```text
+anomaly_type = extreme_price_movement
+```
+
+The diagnostic payload includes:
+
+- Previous mid price
+- Current mid price
+- Movement in basis points
+- Previous observation timestamp
+- Current observation timestamp
+
+Controlled tests were used to verify that extreme movements are correctly detected and persisted without modifying production market-data records.
+
+---
+
+## Anomaly Persistence
+
+All anomaly types use a common persistence structure:
+
+```text
+symbol
+anomaly_type
+severity
+metric_value
+threshold_value
+details
+detected_at
+resolved_at
+```
+
+The `details` field uses PostgreSQL `JSONB` to retain additional diagnostic context.
+
+Current severity levels are:
+
+```text
+info
+warning
+critical
+```
+
+If no anomaly is detected, the anomaly branch emits no record and normal quote processing continues unaffected.
+
+---
+
+## Data Model
+
+The PostgreSQL schema currently contains four core operational tables.
+
+### `fx_quotes`
+
+Stores normalized market data and raw provider responses.
+
+### `workflow_runs`
+
+Stores workflow execution lifecycle information.
+
+### `anomalies`
+
+Stores detected data-quality and operational anomalies.
+
+### `alerts`
+
+Reserved for operational notifications generated from detected anomalies and workflow conditions.
+
+---
+
+## Reliability Controls
+
+The project currently implements multiple reliability controls across the data lifecycle:
+
+- Scheduled automation
+- Sequential API request processing
+- Explicit API request throttling
 - Provider-response validation
-- Currency-code validation
-- Bid and ask numeric validation
+- Structured data normalization
+- Bid/ask integrity checks
 - Positive-price validation
-- Detection of invalid bid/ask relationships
-- Timestamp validation
 - UTC timestamp normalization
-- Mid-price calculation
-- Spread calculation
-
-### Reliability and Idempotency
-
-- Database-level duplicate quote protection
-- Idempotent quote persistence using conflict handling
-- Duplicate-safe PostgreSQL inserts
-- Containerized local environment using Docker Compose
-- Explicit n8n timezone configuration using `Asia/Nicosia`
-
-### Workflow Execution Monitoring
-
-- Workflow execution start logging
-- n8n execution ID tracking
-- Workflow name tracking
-- Execution status tracking
-- Processed-record counts
-- Automatic execution start timestamps
-- Automatic completion timestamps
-- Successful execution tracking
-- Persistent execution history in PostgreSQL
-
-### Failure Handling
-
-- Dedicated n8n error-handling workflow
-- Centralized production failure handling
-- Automatic failed-run detection
-- Failed execution ID correlation
-- Error-message persistence
-- Failed-run completion timestamps
-- Separation of success and failure handling logic
-- Controlled production failure testing
-
-### Operational Anomaly Detection
-
-- Independent anomaly-detection branch
-- Wide-spread detection
-- Stale-quote detection
-- Previous-quote price comparison
+- Database uniqueness constraints
+- Duplicate-safe persistence
+- Raw provider payload retention
+- Workflow execution IDs
+- Execution lifecycle tracking
+- Dynamic processed-record counting
+- Success-state persistence
+- Failure-state persistence
+- Centralized error handling
+- Error-message capture
+- Wide-spread monitoring
+- Stale-data monitoring
+- Previous-quote comparison
 - Extreme price-movement detection
-- Warning and critical severity classification
-- Structured anomaly metadata
-- PostgreSQL anomaly persistence
-- Raw metric and threshold persistence
-- Previous/current quote context for price-movement anomalies
-- Controlled anomaly testing without modifying production market data
-- Anomaly detection that does not interrupt normal quote persistence
+- Anomaly severity classification
+- Structured anomaly persistence
+- Independent monitoring branches
+
+---
+
+## Security
+
+Sensitive information is kept outside source control.
+
+### API Credentials
+
+External API authentication is managed through n8n credentials.
+
+API keys are not embedded directly in exported workflow logic.
+
+### PostgreSQL Credentials
+
+Database credentials are managed through n8n credentials.
+
+### Environment Variables
+
+Local configuration is stored in:
+
+```text
+.env
+```
+
+The file is excluded from Git.
+
+A safe configuration template is provided through:
+
+```text
+.env.example
+```
+
+### SQL Safety
+
+Dynamic PostgreSQL price comparisons use query parameters rather than directly interpolating runtime values into SQL statements.
+
+### Repository Safety
+
+Exported workflow files are reviewed for secrets before being committed to Git.
+
+---
 
 ## Tech Stack
 
@@ -144,297 +597,71 @@ Validated quotes are also evaluated by independent operational monitoring branch
 - Docker
 - Git
 
-## Data Model
-
-The PostgreSQL schema contains four core tables:
-
-- `fx_quotes` - normalized FX market data and original provider payloads
-- `workflow_runs` - workflow execution and processing information
-- `anomalies` - detected operational and market-data anomalies
-- `alerts` - operational alerts generated from detected issues
-
-### `fx_quotes`
-
-The `fx_quotes` table stores:
-
-- Symbol
-- Provider instrument identifier
-- Bid price
-- Ask price
-- Mid price
-- Spread
-- Data source
-- Market observation timestamp
-- Data receipt timestamp
-- Raw provider payload
-
-Duplicate quotes are protected by a database-level unique constraint based on symbol, observation timestamp, and source.
-
-The ingestion workflow also uses conflict handling so repeated quotes can be safely ignored without causing the workflow to fail.
-
-### `workflow_runs`
-
-The `workflow_runs` table stores:
-
-- Workflow name
-- n8n execution ID
-- Execution status
-- Number of records processed
-- Error message
-- Execution start timestamp
-- Execution completion timestamp
-
-A workflow run is initially recorded with:
-
-    status = started
-
-Successful runs are updated to:
-
-    status = success
-
-Failed production runs are updated through the dedicated error workflow to:
-
-    status = failed
-
-The n8n execution ID is used to correlate the start, success, and failure stages of the same workflow execution.
-
-### `anomalies`
-
-The `anomalies` table stores:
-
-- FX symbol
-- Anomaly type
-- Severity
-- Observed metric value
-- Configured threshold value
-- Structured anomaly details
-- Detection timestamp
-- Resolution timestamp
-
-Current anomaly types include:
-
-    wide_spread
-    stale_quote
-    extreme_price_movement
-
-The `details` JSONB field stores additional diagnostic context such as bid/ask prices, calculated spread, quote age, previous and current mid prices, price movement, data source, and observation timestamps.
-
-## Main Workflow
-
-The current FX quote ingestion workflow combines ingestion, execution monitoring, and operational data-quality controls.
-
-### 1. Manual Trigger
-
-Starts the workflow manually during development and testing.
-
-### 2. Schedule Trigger
-
-Automatically starts the production ingestion workflow once per hour.
-
-### 3. Log Run Started
-
-Creates a record in `workflow_runs` containing the workflow name, n8n execution ID, initial `started` status, and execution start timestamp.
-
-### 4. Fetch EURUSD Quote
-
-Retrieves the latest EUR/USD exchange-rate data from the Alpha Vantage REST API.
-
-### 5. Validate & Normalize Quote
-
-Uses JavaScript to:
-
-- Validate the provider response
-- Verify required currency fields
-- Validate bid and ask prices
-- Detect invalid quote relationships
-- Normalize the provider response into the internal FX data model
-- Calculate mid price
-- Calculate spread
-- Normalize timestamps to UTC
-
-After validation, the workflow separates into independent persistence and monitoring branches.
-
-### 6. Persist Quote to PostgreSQL
-
-Stores the validated and normalized quote in `fx_quotes`.
-
-Duplicate quotes are safely skipped when they conflict with the database uniqueness constraint.
-
-### 7. Mark Run Success
-
-Updates the corresponding `workflow_runs` record using the n8n execution ID.
-
-The completed execution is marked with:
-
-- `status = success`
-- Number of records processed
-- Completion timestamp
-
-## Operational Anomaly Detection
-
-Operational checks run independently from the main persistence branch so that an unusual but structurally valid quote can still be stored while being flagged for investigation.
-
-### Wide Spread Detection
-
-The system converts the absolute spread into basis points using:
-
-    spread_bps = (spread / mid_price) * 10000
-
-Current initial thresholds:
-
-    Warning threshold: 2 bps
-    Critical threshold: 5 bps
-
-When the configured threshold is exceeded, a `wide_spread` anomaly is created.
-
-### Stale Quote Detection
-
-The system compares the market observation timestamp with the current execution time.
-
-Current initial thresholds:
-
-    Warning threshold: 600 seconds
-    Critical threshold: 1800 seconds
-
-Quotes exceeding the configured age threshold generate a `stale_quote` anomaly.
-
-### Extreme Price Movement Detection
-
-The system queries PostgreSQL for the most recent earlier quote for the same symbol and compares its mid price with the current quote.
-
-The movement is calculated in basis points:
-
-    movement_bps =
-        abs((current_mid_price - previous_mid_price) / previous_mid_price)
-        * 10000
-
-Current initial thresholds:
-
-    Warning threshold: 20 bps
-    Critical threshold: 50 bps
-
-A movement above the configured threshold generates an:
-
-    extreme_price_movement
-
-anomaly.
-
-The anomaly record includes:
-
-- Previous mid price
-- Current mid price
-- Movement in basis points
-- Previous observation timestamp
-- Current observation timestamp
-
-Parameterized PostgreSQL queries are used when retrieving the previous quote.
-
-### Anomaly Persistence
-
-Detected anomalies are normalized into a common structure before being inserted into PostgreSQL:
-
-    symbol
-    anomaly_type
-    severity
-    metric_value
-    threshold_value
-    details
-
-This allows different operational checks to use the same persistence model.
-
-If no anomaly is detected, the monitoring branch produces no anomaly record and the normal ingestion path continues unaffected.
-
-## Error Handling Workflow
-
-A separate workflow named:
-
-    FX Workflow Error Handler
-
-handles production failures.
-
-Its architecture is:
-
-    Error Trigger
-         |
-         v
-    Mark Run Failed
-
-When the main production workflow fails, n8n passes information about the failed execution to the error handler.
-
-The error handler correlates the failure with the original `workflow_runs` record using the failed execution ID and updates:
-
-- `status = failed`
-- Error message
-- Completion timestamp
-
-This allows successful and failed workflow executions to be monitored through the same PostgreSQL execution history.
-
-## Reliability and Observability
-
-The system currently implements controls across the complete ingestion lifecycle:
-
-- Input validation before persistence
-- Provider-response validation
-- Quote integrity checks
-- Database uniqueness constraints
-- Duplicate-safe persistence
-- Raw payload retention
-- Workflow execution IDs
-- Execution start logging
-- Success-state persistence
-- Failure-state persistence
-- Error-message capture
-- Execution timestamps
-- Dedicated production error handling
-- Wide-spread monitoring
-- Stale-data monitoring
-- Historical quote comparison
-- Extreme price-movement detection
-- Severity classification
-- Structured anomaly persistence
-- Independent monitoring branches
-
-These controls allow both technical failures and market-data quality issues to be traced across the workflow and database layers.
-
-## Security
-
-API keys, database passwords, and other sensitive credentials are not stored in source control.
-
-- API authentication is managed through n8n credentials
-- Database authentication is managed through n8n credentials
-- Local environment variables are stored in `.env`
-- `.env` is excluded from Git
-- `.env.example` contains only configuration placeholders
-- Credentials are not stored directly in exported workflow files
-- API credentials are restricted to the required external API domain where applicable
-- Dynamic PostgreSQL comparisons use query parameters instead of directly interpolating values into SQL
+---
 
 ## Project Structure
 
-    .
-    ├── docs/
-    │   └── architecture.md
-    ├── sql/
-    │   └── 001_schema.sql
-    ├── workflows/
-    │   ├── fx-quote-ingestion-alpha-vantage.json
-    │   └── fx-workflow-error-handler.json
-    ├── .env.example
-    ├── .gitignore
-    ├── docker-compose.yml
-    └── README.md
+```text
+.
+├── docs/
+│   └── architecture.md
+├── sql/
+│   └── 001_schema.sql
+├── workflows/
+│   ├── multi-instrument-fx-operations-pipeline-alpha-vantage.json
+│   └── fx-workflow-error-handler.json
+├── .env.example
+├── .gitignore
+├── docker-compose.yml
+└── README.md
+```
+
+---
+
+## Current Pipeline Capabilities
+
+The current system can:
+
+1. Automatically start FX ingestion workflows
+2. Generate multiple FX instrument requests dynamically
+3. Process external API requests sequentially
+4. Throttle third-party API traffic
+5. Retrieve multiple FX instruments through one reusable REST integration
+6. Validate external structured data
+7. Normalize provider-specific responses
+8. Calculate FX pricing metrics
+9. Persist normalized market data
+10. Protect against duplicate records
+11. Track workflow execution lifecycles
+12. Count processed records dynamically
+13. Detect successful and failed workflow runs
+14. Capture production failure messages
+15. Detect wide spreads
+16. Detect stale quotes
+17. Compare current and historical FX prices
+18. Detect extreme market-data movements
+19. Classify anomalies by severity
+20. Persist structured anomaly information
+
+---
 
 ## Development Roadmap
 
-- Multi-instrument FX ingestion
-- Configurable anomaly thresholds
+Planned extensions include:
+
+- Additional FX instruments
+- Configurable instrument lists
 - Instrument-specific anomaly thresholds
-- Automated operational alerts
+- Configurable anomaly rules
+- Multi-source market-data integration
+- Cross-provider quote comparison
+- Automated anomaly alerts
 - Anomaly resolution lifecycle
-- Workflow health monitoring
-- Retry strategies for recoverable failures
+- Workflow health metrics
+- Retry strategies for recoverable API failures
+- Application-level API rate-limit handling
 - Python-based analytical processing
 - Statistical anomaly detection
-- Multi-source market-data integration
-- AI/LLM-generated incident summaries
 - Monitoring and operational dashboard
+- Data visualization
+- AI/LLM-generated operational incident summaries
