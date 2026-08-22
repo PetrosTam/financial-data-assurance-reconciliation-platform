@@ -27,6 +27,9 @@ services:
       GENERIC_TIMEZONE: Asia/Nicosia
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
       N8N_RUNNERS_ENABLED: "true"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO}
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:
@@ -36,3 +39,4 @@ services:
 volumes:
   postgres_data:
   n8n_data:
+  
