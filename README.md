@@ -1,92 +1,135 @@
 # FX Operations Automation & Monitoring
 
-A reliability-focused FX market-data operations platform built with n8n, JavaScript, REST APIs, PostgreSQL, Docker Compose, and Git.
+A reliability-focused **FX market-data quality, monitoring, alerting, reconciliation, observability, and research platform** built incrementally with evidence-driven engineering.
 
-The broader project scope treats FX prices as operational and research data for ingestion, validation, persistence, monitoring, anomaly detection, alerting, reconciliation, replay, analytics, incidents, and experiments.
+The current verified runtime is based on **n8n, JavaScript, Alpha Vantage REST, PostgreSQL 16, Docker Compose, Git/GitHub, and Gmail SMTP**.
 
-It is **not a trading bot**.
+The broader project evolves this operational foundation toward a provider-neutral market-data assurance platform and an MSc thesis artifact.
+
+> **This is not a trading bot.**  
+> The project does not execute trades, generate trading signals, manage positions, perform hedging, or calculate trading P&L. FX prices are treated as operational and research data.
 
 ---
 
-## Overview
+## Project Status
 
-The current implementation provides a multi-instrument FX ingestion and monitoring pipeline that:
+The repository distinguishes implementation status explicitly:
 
-- retrieves FX market data from Alpha Vantage through a REST API
-- processes EUR/USD, GBP/USD, and USD/JPY sequentially
-- validates and normalizes provider-specific responses
-- persists normalized quotes and raw provider payloads in PostgreSQL
-- tracks workflow execution lifecycle
-- detects operational anomalies
-- compares current and previous prices
-- persists structured anomaly records
-- routes critical anomalies to email alerts
-- records alert delivery success or failure
-- keeps runtime email routing configuration outside source control
-- includes a verified anomaly lifecycle-ready database schema
-- automatically applies the base schema and lifecycle migration when initializing a fresh PostgreSQL data volume
+- **TESTED** — verified through inspected runtime, database, execution, log, container, delivery, or deterministic test evidence.
+- **IMPLEMENTED** — code/config/schema exists, but verification is incomplete.
+- **IN PROGRESS** — partially implemented.
+- **PLANNED** — accepted target capability, not yet implemented.
+- **PROPOSED** — candidate enhancement requiring design or feasibility confirmation.
+- **OPTIONAL** — future/laboratory capability.
+- **UNKNOWN** — evidence is insufficient.
 
-The current system is designed around evidence-driven engineering principles: deterministic validation, idempotency, explicit failure handling, observable workflow state, small changes, controlled testing, secure configuration, and reproducible checkpoints.
+### Verified End-of-Part-02 State
+
+| Capability | Status | Evidence / interpretation |
+|---|---|---|
+| Multi-instrument FX ingestion | **TESTED** | EUR/USD, GBP/USD, USD/JPY normalized and persisted in a verified run |
+| Workflow lifecycle and failure handling | **TESTED** | `started` / `success` / `failed` paths verified |
+| Duplicate-safe quote persistence | **TESTED** | Database uniqueness + conflict-safe persistence |
+| Operational anomaly detection | **TESTED** | Wide spread, stale quote, and extreme movement paths |
+| Critical email alerting | **TESTED** | Persisted pending alert → Gmail SMTP → `sent` / `failed` |
+| Alert delivery state persistence | **TESTED** | `pending`, `sent`, `failed`; `sent_at` on success |
+| Environment-based email routing | **TESTED** | Sender/recipient loaded from environment variables |
+| n8n state persistence | **TESTED** | Named-volume mount and restoration verified |
+| Anomaly lifecycle database schema | **TESTED** | `open` / `acknowledged` / `resolved`, constraint and index verified |
+| Fresh PostgreSQL bootstrap | **TESTED** | `001_schema.sql` then `002_alerting_anomaly_lifecycle.sql` verified |
+| Operator lifecycle manager | **PLANNED** | Transition workflow/API not yet implemented |
+| Provider abstraction | **PLANNED** | Canonical output exists, but only Alpha Vantage integration is implemented |
+| Second source | **PLANNED** | Not yet integrated |
+| Temporal cross-source reconciliation | **PLANNED** | Do not call current ingestion “reconciliation” |
+| Python research layer | **PLANNED** | Defined by the MSc proposal, not current runtime |
+| Prometheus / Grafana | **PLANNED** | Not integrated in current runtime |
+| Platform API / BFF | **PLANNED** | Target browser/server boundary |
+| React/TypeScript operator console | **PLANNED** | No current operator web product |
+| Expanded platform stack | **PLANNED / PROPOSED / OPTIONAL** | Target architecture only; no implementation claim |
+
+> `records_processed=3` in the verified three-pair run means **three normalized output records**, not necessarily three newly inserted rows when duplicate conflict handling is active.
+
+---
+
+## Current System Purpose
+
+The current system provides a small but verified operational foundation for:
+
+- FX market-data ingestion
+- provider-response validation
+- provider-specific normalization into a common internal shape
+- PostgreSQL persistence
+- duplicate protection
+- execution lifecycle tracking
+- controlled failure handling
+- operational anomaly detection
+- persisted anomaly evidence
+- critical alert generation
+- real email delivery
+- delivery-state persistence
+- lifecycle-ready anomaly schema
+- reproducible local database bootstrap
+- secure configuration and checkpoint discipline
+
+The project prioritizes:
+
+1. correctness
+2. explicit evidence
+3. reproducibility
+4. failure transparency
+5. idempotency
+6. provenance
+7. simple verified components before additional complexity
 
 ---
 
 ## Current Architecture
 
-### Main FX Operations Pipeline
+### Main Operational Flow
 
 ```text
-Manual Trigger ──────────────┐
-                             │
-Schedule Trigger ────────────┤
-                             v
-                      Log Run Started
-                             |
-                             v
-                     Generate FX Pairs
-                             |
-                             v
-                     Loop Over Items
-                     Batch Size = 1
-                             |
-                         loop output
-                             |
-                             v
-                       Fetch FX Quote
-                             |
-                             v
-                          Wait
-                             |
-                             └──────────────→ Loop Over Items
-
-                     done output
-                             |
-                             v
-                  Validate & Normalize Quote
-                             |
-              ┌──────────────┼──────────────────────┐
-              |              |                      |
-              v              v                      v
-        Persist Quote   Detect Operational      Check Price
-        to PostgreSQL      Anomalies             Movement
-              |              |                      |
-              v              └──────────┬───────────┘
-       Mark Run Success                 |
-                                        v
-                                   Log Anomaly
-                                        |
-                                        v
-                              Is Critical Anomaly?
-                                  true |
-                                       v
-                                  Create Alert
-                                       |
-                                       v
-                          Send Critical Alert Email
-                              /                  \
-                        success                  error
-                           |                       |
-                           v                       v
-                    Mark Alert Sent        Mark Alert Failed
+Manual Trigger / Schedule Trigger
+              |
+              v
+       Log Run Started
+              |
+              v
+      Generate FX Pairs
+              |
+              v
+     Sequential Pair Loop
+              |
+              v
+        Fetch FX Quote
+              |
+              v
+             Wait
+              |
+              v
+   Validate & Normalize Quote
+        /          |           \
+       v           v            v
+ Persist Quote  Detect Ops   Check Price
+ PostgreSQL     Anomalies     Movement
+       \           |            /
+        \          v           /
+         ------ Log Anomaly ----
+                  |
+                  v
+        Is Critical Anomaly?
+                  |
+               true
+                  v
+            Create Alert
+          status = pending
+                  |
+                  v
+     Send Critical Alert Email
+          /               \
+     success               error
+        |                    |
+        v                    v
+ Mark Alert Sent      Mark Alert Failed
 ```
 
 ### Production Failure Handling
@@ -101,14 +144,14 @@ Production Workflow Failure
       Mark Run Failed
             |
             v
-       PostgreSQL
+       workflow_runs
 ```
+
+The workflow export and runtime remain the authoritative source for exact node wiring.
 
 ---
 
-## Implemented Features
-
-### Multi-Instrument FX Ingestion
+## Multi-Instrument FX Ingestion
 
 The current workflow processes:
 
@@ -118,20 +161,18 @@ GBP/USD
 USD/JPY
 ```
 
-Pairs are generated dynamically by the `Generate FX Pairs` node.
-
-Each generated item contains:
+Pairs are generated dynamically by the `Generate FX Pairs` node using:
 
 ```text
 from_currency
 to_currency
 ```
 
-The same REST integration therefore processes multiple FX instruments without duplicating the HTTP integration node.
+The same provider integration is therefore reused for all three pairs.
 
-### Sequential API Processing
+### Sequential Provider Requests
 
-External provider requests are processed sequentially:
+The current integration uses explicit pacing:
 
 ```text
 Generate FX Pairs
@@ -140,9 +181,9 @@ Loop Over Items
       ↓
 Fetch FX Quote
       ↓
-Wait
+Wait 3 seconds
       ↓
-Loop Over Items
+Next item
 ```
 
 `Loop Over Items` uses:
@@ -151,47 +192,61 @@ Loop Over Items
 Batch Size = 1
 ```
 
-and the workflow introduces a three-second wait between provider requests.
+This is a deliberate current-provider pacing mechanism, not a general retry/resilience framework.
 
-This provides explicit request pacing for the current provider integration.
+### Schedule
 
-### Scheduled Automation
+The committed production workflow is scheduled every four hours at minute 5.
 
-The workflow supports:
-
-- manual execution for development and controlled testing
-- scheduled execution for automated ingestion
-
-The current production schedule runs every four hours.
+Manual execution is also available for controlled development and verification.
 
 ---
 
-## External API Integration
+## Current Provider Integration
 
-Market data is currently retrieved from the Alpha Vantage FX API using:
+The implemented provider is **Alpha Vantage** using:
 
 ```text
 CURRENCY_EXCHANGE_RATE
 ```
 
-Dynamic request parameters are used:
+with dynamic request parameters:
 
 ```text
 from_currency = {{ $json.from_currency }}
 to_currency   = {{ $json.to_currency }}
 ```
 
-API authentication is stored using n8n credentials and is not embedded directly in exported workflow logic.
+API authentication is stored in n8n credentials rather than embedded in workflow logic.
 
-Provider responses are treated as untrusted input.
+External provider responses are treated as **untrusted input**.
 
 ---
 
-## FX Data Validation and Normalization
+## Validation and Normalization
 
-Provider-specific responses are transformed into a common internal representation using JavaScript.
+Provider-specific responses are validated before persistence.
 
-Each normalized quote contains:
+### Current Validation Controls
+
+The current normalization path checks:
+
+- provider error payloads
+- expected provider response shape
+- required currency fields
+- numeric bid
+- numeric ask
+- positive bid
+- positive ask
+- `ask >= bid`
+- presence of timestamp data
+- parseable timestamp semantics used by the current adapter
+
+Invalid responses are rejected before quote persistence.
+
+### Current Canonical Quote Shape
+
+The normalized output includes fields such as:
 
 ```text
 symbol
@@ -205,278 +260,87 @@ observed_at
 raw_payload
 ```
 
-Examples:
+Canonical symbols currently include:
 
 ```text
-EUR + USD → EURUSD
-GBP + USD → GBPUSD
-USD + JPY → USDJPY
+EURUSD
+GBPUSD
+USDJPY
 ```
 
-### Validation Controls
-
-The current validation layer checks:
-
-- expected provider response structure
-- required source/target currency fields
-- numeric bid values
-- numeric ask values
-- positive bid and ask values
-- `ask >= bid`
-- presence and validity of the market timestamp
-- provider error responses
-
-Invalid provider responses are rejected before persistence.
-
-### Derived Metrics
+### Derived Values
 
 ```text
 mid_price = (bid + ask) / 2
 spread    = ask - bid
-```
-
-Operational spread monitoring also uses:
-
-```text
 spread_bps = (spread / mid_price) * 10000
 ```
 
-Timestamps are normalized before persistence.
+### Important Current Limitation
+
+The current Alpha Vantage normalizer produces a canonical output shape, but that does **not** yet equal a full provider-abstraction layer.
+
+Known gaps include:
+
+- `provider_instrument_id` is currently `NULL` because no provider identifier semantics have yet been implemented for the current adapter.
+- raw provider timestamp text is not yet retained separately as `source_timestamp_raw`.
+- timezone and timestamp-precision provenance are not yet fully explicit.
+- historical/live arrival-time semantics must not be fabricated when unavailable.
+
+These are planned hardening items before multi-provider research and reconciliation.
 
 ---
 
-## PostgreSQL Persistence
+## PostgreSQL Data Model
 
-Validated quotes are stored in:
+The current database contains four core operational tables.
 
-```text
-fx_quotes
-```
+### `fx_quotes`
 
-The table stores:
+Stores normalized quotes and raw provider payloads.
 
-- symbol
-- provider instrument identifier
-- bid
-- ask
-- mid price
-- spread
-- source
-- observation timestamp
-- receipt timestamp
-- raw provider payload
-
-### Duplicate Protection
-
-Database-level uniqueness constraints protect against duplicate market-data records.
-
-The persistence path uses conflict handling so duplicate quotes can be skipped safely instead of failing the entire workflow.
-
-This makes quote persistence idempotent for the current uniqueness model.
-
----
-
-## Workflow Execution Monitoring
-
-Each workflow run is tracked in:
+Representative fields:
 
 ```text
-workflow_runs
+symbol
+provider_instrument_id
+bid
+ask
+mid_price
+spread
+source
+observed_at
+received_at
+raw_payload
 ```
 
-### Run Start
+Current logical uniqueness:
 
-`Log Run Started` records:
+```sql
+UNIQUE (symbol, observed_at, source)
+```
 
-- workflow name
-- n8n execution ID
-- status
-- records processed
-- start timestamp
+### `workflow_runs`
 
-Initial state:
+Stores workflow execution state.
+
+Representative fields:
 
 ```text
-status = started
-records_processed = 0
+workflow_name
+execution_id
+status
+records_processed
+error_message
+started_at
+finished_at
 ```
 
-### Successful Execution
+### `anomalies`
 
-`Mark Run Success` updates the matching execution row using the n8n execution ID.
+Stores operational/data-quality findings and lifecycle fields.
 
-Final success state:
-
-```text
-status = success
-records_processed = <number of normalized FX quotes>
-finished_at = <completion timestamp>
-```
-
-For the current three-instrument pipeline:
-
-```text
-records_processed = 3
-```
-
-The processed-record count is calculated dynamically.
-
----
-
-## Production Failure Handling
-
-A dedicated workflow named:
-
-```text
-FX Workflow Error Handler
-```
-
-handles production workflow failures.
-
-Architecture:
-
-```text
-Error Trigger
-      ↓
-Mark Run Failed
-```
-
-The failure workflow correlates the failed execution with the corresponding `workflow_runs` row using the execution ID and updates:
-
-```text
-status = failed
-error_message = <actual failure message>
-finished_at = <failure completion timestamp>
-```
-
-Controlled failures were used during development to verify the failure path.
-
----
-
-## Operational Anomaly Detection
-
-Validated quotes are evaluated by monitoring branches independently of quote persistence.
-
-This allows structurally valid but operationally unusual market-data records to remain available for analysis while also being flagged for investigation.
-
-Current anomaly types:
-
-```text
-wide_spread
-stale_quote
-extreme_price_movement
-```
-
-Detected anomalies are stored in:
-
-```text
-anomalies
-```
-
----
-
-## Wide Spread Detection
-
-The system calculates:
-
-```text
-spread_bps = (spread / mid_price) * 10000
-```
-
-Current operational assumptions:
-
-```text
-Warning:  > 2 bps
-Critical: > 5 bps
-```
-
-These are project-level operational thresholds, not universal FX market rules.
-
-When exceeded, the workflow creates:
-
-```text
-anomaly_type = wide_spread
-```
-
-Diagnostic context includes:
-
-- bid
-- ask
-- mid price
-- absolute spread
-- spread in basis points
-- source
-- observation timestamp
-
----
-
-## Stale Quote Detection
-
-The workflow compares the quote observation timestamp with the current workflow time.
-
-Current operational assumptions:
-
-```text
-Warning:  > 600 seconds
-Critical: > 1800 seconds
-```
-
-When exceeded:
-
-```text
-anomaly_type = stale_quote
-```
-
-The anomaly retains quote-age and timestamp context.
-
-Freshness is treated as a deterministic operational control.
-
----
-
-## Extreme Price Movement Detection
-
-The workflow compares each current quote with the latest earlier quote for the same FX symbol stored in PostgreSQL.
-
-The previous quote is retrieved using a parameterized SQL query.
-
-Current movement calculation:
-
-```text
-movement_bps =
-    abs(
-        (current_mid_price - previous_mid_price)
-        / previous_mid_price
-    ) * 10000
-```
-
-Current operational assumptions:
-
-```text
-Warning:  > 20 bps
-Critical: > 50 bps
-```
-
-When exceeded:
-
-```text
-anomaly_type = extreme_price_movement
-```
-
-Diagnostic context includes:
-
-- previous mid price
-- current mid price
-- movement in basis points
-- previous observation timestamp
-- current observation timestamp
-
-Controlled tests were used to verify this anomaly path without altering production market-data records.
-
----
-
-## Anomaly Persistence
-
-Anomalies use a common persistence structure including:
+Representative fields:
 
 ```text
 symbol
@@ -492,9 +356,170 @@ acknowledged_at
 resolution_reason
 ```
 
-`details` uses PostgreSQL `JSONB` for diagnostic context.
+### `alerts`
 
-Current severity values are:
+Stores alert-delivery state.
+
+Representative fields:
+
+```text
+anomaly_id
+channel
+status
+message
+sent_at
+created_at
+```
+
+---
+
+## Duplicate Safety and Idempotency
+
+Quote persistence uses database-backed duplicate protection.
+
+The current uniqueness model is:
+
+```sql
+UNIQUE (symbol, observed_at, source)
+```
+
+The persistence path uses conflict handling so replaying the same logical quote does not cause an insertion failure.
+
+This provides idempotency for the current logical uniqueness definition.
+
+---
+
+## Workflow Execution Lifecycle
+
+### Run Start
+
+`Log Run Started` writes:
+
+```text
+status = started
+records_processed = 0
+```
+
+along with workflow identity, n8n execution ID, and start timestamp.
+
+### Successful Completion
+
+`Mark Run Success` updates the corresponding row by execution ID.
+
+Successful state:
+
+```text
+status = success
+records_processed = <normalized output count>
+finished_at = <completion timestamp>
+```
+
+For the verified three-pair run:
+
+```text
+records_processed = 3
+```
+
+### Failure Handling
+
+A dedicated workflow:
+
+```text
+FX Workflow Error Handler
+```
+
+uses:
+
+```text
+Error Trigger
+      ↓
+Mark Run Failed
+```
+
+and updates:
+
+```text
+status = failed
+error_message = <actual failure message>
+finished_at = <failure timestamp>
+```
+
+Controlled failures were used to verify this path.
+
+---
+
+## Operational Anomaly Detection
+
+Current anomaly types are:
+
+```text
+wide_spread
+stale_quote
+extreme_price_movement
+```
+
+The current thresholds are **operational assumptions only**. They are not universal market rules and are not the thesis-calibrated statistical baselines.
+
+### Wide Spread
+
+```text
+spread_bps = (spread / mid_price) * 10000
+```
+
+Current thresholds:
+
+```text
+Warning:  > 2 bps
+Critical: > 5 bps
+```
+
+### Stale Quote
+
+Current thresholds:
+
+```text
+Warning:  > 600 seconds
+Critical: > 1800 seconds
+```
+
+Freshness is treated as a deterministic operational policy.
+
+### Extreme Price Movement
+
+Current calculation:
+
+```text
+movement_bps =
+    abs(
+        (current_mid_price - previous_mid_price)
+        / previous_mid_price
+    ) * 10000
+```
+
+Current thresholds:
+
+```text
+Warning:  > 20 bps
+Critical: > 50 bps
+```
+
+The previous quote is retrieved with parameterized SQL.
+
+### Critical Multi-Provider Safety Gap
+
+The current previous-quote lookup is based on symbol/time semantics and is not yet explicitly provider/source-safe.
+
+Before introducing a second live provider, the lookup must be made source/provider-scoped or moved into explicitly defined cross-source reconciliation logic.
+
+Accidental cross-provider baselining must not be allowed.
+
+---
+
+## Anomaly Persistence
+
+Detected findings use a common structure.
+
+Current severity values:
 
 ```text
 info
@@ -502,13 +527,26 @@ warning
 critical
 ```
 
-If no anomaly is detected, the anomaly branch emits no anomaly record and normal quote processing continues.
+`details` is stored in PostgreSQL `JSONB` for type-specific evidence.
+
+If no anomaly is detected, the monitoring branch emits no anomaly record and normal quote processing continues.
+
+### Current Threshold-Provenance Debt
+
+The current `threshold_value` field stores the base operational detection threshold, while critical severity may be determined by a second hardcoded boundary.
+
+Future configuration-driven rules should preserve:
+
+- severity-specific threshold
+- rule identifier
+- configuration version
+- effective configuration provenance
 
 ---
 
-## Critical Anomaly Email Alerting
+## Critical Alerting
 
-Critical anomalies enter a dedicated alerting path:
+Critical anomalies enter the verified email-alert path:
 
 ```text
 Log Anomaly
@@ -523,15 +561,7 @@ Send Critical Alert Email
    └─ error   → Mark Alert Failed
 ```
 
-### Alert Persistence
-
-Generated notifications are stored in:
-
-```text
-alerts
-```
-
-The current alert delivery lifecycle supports:
+### Current Delivery States
 
 ```text
 pending
@@ -539,45 +569,47 @@ sent
 failed
 ```
 
-On successful delivery:
+On success:
 
 ```text
 status = sent
 sent_at = <delivery timestamp>
 ```
 
-On delivery failure:
+On failure:
 
 ```text
 status = failed
 ```
 
-The alert record retains its relationship to the originating anomaly where applicable.
+### Verified Delivery Evidence
 
-### Verified Delivery
-
-The email path has been verified with:
+The current Gmail SMTP path has been verified using:
 
 - deterministic test input
-- the configured SMTP credential
-- environment-based sender and recipient configuration
+- configured n8n SMTP credential
+- environment-based sender/recipient
 - successful SMTP acceptance
-- real Gmail mailbox delivery
+- real Gmail inbox delivery
+- persisted success state
+- persisted failure path
 - cleanup of temporary test artifacts
+
+Email/Gmail SMTP is the only currently implemented alert channel.
+
+Slack, Teams, Jira, ServiceNow, and PagerDuty remain future adapters.
 
 ---
 
 ## Email Configuration and Secret Handling
 
-SMTP authentication remains stored in the n8n credential:
+SMTP authentication remains in the n8n credential:
 
 ```text
 FX Ops Gmail SMTP
 ```
 
-Email sender and recipient addresses are not hardcoded in the exported production workflow.
-
-The workflow uses:
+The workflow reads:
 
 ```text
 $env.ALERT_EMAIL_FROM
@@ -590,7 +622,7 @@ Real local values are stored in:
 .env
 ```
 
-The file is excluded from Git.
+and are excluded from Git.
 
 A safe template is committed as:
 
@@ -605,19 +637,19 @@ ALERT_EMAIL_FROM=alerts@example.com
 ALERT_EMAIL_TO=operator@example.com
 ```
 
-Docker Compose passes the configured values into the n8n container.
+No real personal alert address should be committed in workflow exports.
 
 ---
 
 ## Anomaly Lifecycle Schema
 
-The repository contains:
+Migration:
 
 ```text
 sql/002_alerting_anomaly_lifecycle.sql
 ```
 
-The migration adds lifecycle support to `anomalies` through:
+adds:
 
 ```text
 status
@@ -631,7 +663,7 @@ The base schema already contains:
 resolved_at
 ```
 
-Allowed lifecycle states are:
+Current allowed states:
 
 ```text
 open
@@ -639,35 +671,46 @@ acknowledged
 resolved
 ```
 
-The migration also defines:
+The migration also creates:
 
 ```text
 idx_anomalies_status_detected_at
 ```
 
-for status/time-oriented lifecycle queries.
+### Current Lifecycle Status
 
-### Current Status
+The lifecycle schema is **TESTED**.
 
-The lifecycle database schema is **implemented and verified**.
+The operator transition manager is **not implemented**.
 
-The operator-facing workflow that will manage transitions such as:
-
-```text
-open → acknowledged → resolved
-```
-
-is **not yet implemented**.
-
-The next planned workflow is:
+The exact next feature is:
 
 ```text
 FX Anomaly Lifecycle Manager
 ```
 
-### Fresh Database Initialization
+It must implement:
 
-A fresh PostgreSQL data volume automatically executes the repository initialization scripts in order:
+- anomaly/action validation
+- legal transition checks
+- `open → acknowledged → resolved`
+- timestamp updates
+- resolution reason
+- deterministic success tests
+- invalid-transition tests
+- missing-ID / malformed-input tests
+- database inspection
+- auditability
+- cleanup
+- Git diff/status/secret verification before completion
+
+Future case-management states such as `investigating`, `mitigated`, or `reopened` require a separate migration/API/UI change and are not current Part-02 states.
+
+---
+
+## Fresh PostgreSQL Bootstrap
+
+A fresh PostgreSQL volume automatically applies:
 
 ```text
 001_schema.sql
@@ -675,201 +718,147 @@ A fresh PostgreSQL data volume automatically executes the repository initializat
 002_alerting_anomaly_lifecycle.sql
 ```
 
-Docker Compose mounts both scripts into:
+Docker Compose mounts both under:
 
 ```text
 /docker-entrypoint-initdb.d/
 ```
 
-Fresh-database initialization was verified in an isolated temporary PostgreSQL 16 container.
-
-The verification confirmed:
+An isolated PostgreSQL 16 bootstrap test verified:
 
 - `001_schema.sql` executed
 - `002_alerting_anomaly_lifecycle.sql` executed
-- lifecycle columns were created
+- lifecycle columns exist
 - `status` defaults to `open`
 - `anomalies_status_check` exists
-- allowed states are `open`, `acknowledged`, and `resolved`
+- allowed states are correct
 - `idx_anomalies_status_detected_at` exists
-- no initialization `ERROR` or `FATAL` condition was observed
-
-The temporary test container was removed after verification and the normal project PostgreSQL service remained healthy.
-
----
-
-## Data Model
-
-The PostgreSQL database currently contains four core operational tables.
-
-### `fx_quotes`
-
-Stores normalized FX market data and raw provider responses.
-
-### `workflow_runs`
-
-Stores workflow execution lifecycle information.
-
-### `anomalies`
-
-Stores detected operational/data-quality anomalies and lifecycle-related fields.
-
-### `alerts`
-
-Stores operational alert records and email-delivery state.
+- initialization completed without relevant `ERROR` / `FATAL`
+- the temporary test container was removed afterward
 
 ---
 
-## Reliability Controls
+## n8n Persistence
 
-The current implementation includes:
-
-- scheduled automation
-- manual controlled execution
-- sequential API request processing
-- explicit provider request pacing
-- provider-response validation
-- structured quote normalization
-- positive-price validation
-- bid/ask consistency checks
-- timestamp validation
-- database uniqueness constraints
-- duplicate-safe persistence
-- raw provider payload retention
-- workflow execution IDs
-- execution lifecycle tracking
-- dynamic processed-record counting
-- success-state persistence
-- failure-state persistence
-- centralized error handling
-- error-message capture
-- wide-spread monitoring
-- stale-data monitoring
-- previous-quote comparison
-- extreme price-movement detection
-- anomaly severity classification
-- structured anomaly persistence
-- critical anomaly routing
-- persisted alert state
-- verified email delivery
-- alert success/failure state handling
-- environment-based alert routing configuration
-- ordered fresh-database schema initialization
-- persistent n8n state through a Docker named volume
-
----
-
-## Docker Persistence
-
-n8n application state is persisted through:
+n8n state is persisted through:
 
 ```yaml
 volumes:
   - n8n_data:/home/node/.n8n
 ```
 
-The named volume preserves n8n application state across container recreation.
+Persistence verification included:
 
-Persistence was explicitly regression-tested during development by verifying:
+- resolved Docker Compose inspection
+- actual container mount inspection
+- workflow export checks
+- container recreation
+- successful restoration of the existing n8n account/workflow state
 
-- the resolved Docker Compose mount
-- the actual container mount at `/home/node/.n8n`
-- successful export of both persisted workflows
-- restoration of the existing n8n account and workflow state after container recreation
+A named volume declaration alone is not considered sufficient evidence; the service mount must be verified.
 
 ---
 
-## Security
+## Security and Repository Hygiene
 
-Sensitive runtime values are kept outside source control.
+Current engineering rules include:
 
-### API Credentials
+- API keys stay outside Git
+- SMTP passwords stay outside Git
+- database secrets stay outside Git
+- `.env` and `.env.*` remain ignored except safe `.env.example`
+- n8n credentials hold provider/SMTP authentication
+- dynamic SQL uses parameterization where applicable
+- workflow exports are inspected for:
+  - personal emails
+  - API keys
+  - passwords
+  - bearer/auth tokens
+  - authorization headers
+  - `client_secret`
+  - pinned test data
+- raw licensed research data must remain local unless redistribution rights explicitly allow otherwise
+- public checkpoints exclude:
+  - `.env`
+  - `.git`
+  - runtime volumes
+  - backups
+  - logs
+  - licensed raw datasets
+  - secrets
 
-External API authentication is managed through n8n credentials.
-
-### PostgreSQL Credentials
-
-Database credentials are managed through local environment configuration and n8n credentials where required by workflow nodes.
-
-### SMTP Credentials
-
-SMTP authentication is stored in n8n credentials.
-
-### Environment Variables
-
-Local configuration is stored in:
-
-```text
-.env
-```
-
-`.env` is excluded by `.gitignore`.
-
-Only safe placeholders are committed in `.env.example`.
-
-### SQL Safety
-
-Dynamic PostgreSQL queries that depend on runtime values use parameterized SQL where applicable.
-
-### Repository Safety
-
-Before checkpointing, tracked source and workflow exports are reviewed for:
-
-- hardcoded personal email addresses
-- API keys
-- passwords
-- bearer tokens
-- authorization headers
-- client secrets
-- pinned n8n test data
-
-Project checkpoints are created from committed `HEAD` using `git archive`, not by manually zipping the working directory.
+Project checkpoints are created from committed state using `git archive`, not by manually zipping a working directory.
 
 ---
 
 ## Current Tech Stack
 
-The implemented runtime currently uses:
+### Implemented / Current
 
 - n8n
 - JavaScript
-- REST APIs
-- PostgreSQL
+- Alpha Vantage REST API
+- PostgreSQL 16
 - Docker Compose
-- Git
+- Git / GitHub
+- Gmail SMTP
+
+### Planned / Proposed / Optional Target Landscape
+
+The broader platform may introduce components only when each has a distinct responsibility, a simpler alternative has been considered, and success criteria can be verified.
+
+| Domain | Target technologies / tools | Current status |
+|---|---|---|
+| Orchestration | n8n, Temporal.io, Apache Airflow | n8n current; others planned |
+| Languages | Python, Go, Java, JavaScript, TypeScript, C++, optional Kotlin/Swift | JS current; others planned/optional |
+| APIs/contracts | REST, WebSocket, SSE, gRPC, GraphQL, OpenAPI, Protobuf, AsyncAPI, Pact | outbound REST current; owned contracts planned |
+| Streaming | Kafka, Schema Registry, Kafka Connect, Debezium, Flink, Strimzi, Flink Operator, MirrorMaker 2 | planned |
+| Data stores | PostgreSQL, ClickHouse, Redis, MongoDB | PostgreSQL current; others planned |
+| Lakehouse/analytics | MinIO, Parquet, Iceberg, Spark, Trino, dbt, OpenMetadata | planned |
+| Observability | OpenTelemetry, Jaeger, Prometheus, Grafana, Alertmanager, Loki, Sentry, Pyroscope | planned |
+| Security | OIDC/OAuth2/JWT, RBAC, OpenFGA, Vault, mTLS, OPA/Gatekeeper | planned |
+| Frontend | React, TypeScript, Redux Toolkit, TanStack, Vite, Storybook | planned |
+| Delivery/platform | Terraform, Kubernetes, Helm, GitOps/Argo CD, Argo Rollouts, KEDA | planned |
+| Testing/resilience | Testcontainers, Pact, Playwright, k6, Toxiproxy, Chaos Mesh, Hypothesis, Schemathesis, mutation testing, OWASP ZAP | planned |
+| Research reproducibility | MLflow, manifests/hashes/Git SHA, dataset/version tracking | planned |
+| Optional AIOps | governed LLM/RAG assistant and optional inference lab | optional / final maturity |
+
+Presence in this table is **not an implementation claim**.
 
 ---
 
-## Planned Research and Platform Components
+## Planned Platform Boundary
 
-The broader MSc thesis/platform roadmap includes additional technologies only when they have a concrete responsibility, simpler-alternative review, success criteria, and verification plan.
+The target browser boundary is:
 
-Planned components include:
+```text
+React / TypeScript Console
+          |
+          v
+Platform API / BFF
+          |
+          +--> domain services
+          +--> PostgreSQL / analytical stores via server-side clients
+          +--> Kafka / Flink / n8n / Kubernetes / Argo / Prometheus adapters
+          +--> authorization and audit boundary
+```
 
-- Python
-- provider abstraction
-- second-source reconciliation
-- Prometheus
-- Grafana
-- Go
-- Kafka
-- Flink
-- ClickHouse
-- MinIO / Parquet
-- Spark
-- Trino
-- Redis where justified
-- MongoDB quarantine where justified
-- C++ replay/resilience components
-- REST / gRPC / GraphQL operator APIs with distinct responsibilities
-- React + TypeScript operator console
-- Kubernetes / GitOps / Argo CD when operational scale justifies them
+The browser must never receive:
 
-These are **not claimed as implemented** unless supported by repository and runtime evidence.
+- database credentials
+- provider secrets
+- Kafka credentials
+- Kubernetes credentials
+- Vault credentials
+- unrestricted infrastructure tokens
+
+The product boundary is server-side and typed. Internally, each subsystem should use the appropriate protocol, SDK, driver, or API rather than forcing REST everywhere.
 
 ---
 
 ## Project Structure
+
+Current Part-02 repository structure:
 
 ```text
 .
@@ -887,143 +876,323 @@ These are **not claimed as implemented** unless supported by repository and runt
 └── README.md
 ```
 
----
-
-## Current Pipeline Capabilities
-
-The current implementation can:
-
-1. Start FX ingestion manually or on schedule
-2. Generate multiple FX instrument requests dynamically
-3. Process provider requests sequentially
-4. Apply explicit request pacing
-5. Reuse one REST integration across multiple FX pairs
-6. Validate provider responses before persistence
-7. Normalize provider-specific market data
-8. Calculate mid price and spread
-9. Persist normalized FX quotes
-10. Preserve raw provider payloads
-11. Prevent duplicate quote persistence
-12. Track workflow execution lifecycle
-13. Count processed records dynamically
-14. Mark successful workflow runs
-15. Capture production failures through a dedicated error workflow
-16. Persist workflow failure messages
-17. Detect wide spreads
-18. Detect stale quotes
-19. Compare current and previous FX prices
-20. Detect extreme price movements
-21. Classify anomalies by severity
-22. Persist structured anomaly records
-23. Route critical anomalies into the alerting path
-24. Create pending alert records
-25. Deliver critical alerts through Gmail SMTP
-26. Mark successful alerts as `sent`
-27. Persist `sent_at`
-28. Mark failed alert deliveries as `failed`
-29. Load alert sender/recipient configuration from environment variables
-30. Keep real alert addresses outside committed workflow exports
-31. Support anomaly lifecycle fields at the database-schema level
-32. Apply the lifecycle migration automatically during fresh PostgreSQL initialization
-33. Persist n8n application state through a named Docker volume
+Future modules will be introduced incrementally rather than pre-created without need.
 
 ---
 
-## Testing and Verification
+## Testing and Verification Evidence
 
-Verified development/testing evidence includes:
+Verified evidence includes:
 
-- multi-pair ingestion
-- three normalized/persisted FX records for a successful current run
-- workflow execution start/success lifecycle
-- controlled production failure handling
-- provider/malformed response handling during development
-- operational anomaly paths
-- rate-limit-aware sequential request processing
-- duplicate-safe persistence
+- three-pair ingestion
+- three normalized outputs in a verified current run
+- PostgreSQL persistence inspection
+- duplicate-safe reprocessing
+- `started` / `success` execution lifecycle
+- controlled production failure
+- original failed run updated by error workflow
+- provider/malformed response validation
+- wide-spread detection
+- stale-quote detection
 - extreme price-movement detection
 - critical anomaly routing
-- pending alert creation
-- real Gmail delivery
-- successful alert state transition to `sent`
-- `sent_at` persistence
-- failed alert state path
-- test-data cleanup
-- externalized email routing configuration
-- removal of hardcoded personal email addresses from the production workflow export
-- empty n8n `pinData` in the committed workflow export
-- Docker/n8n persistent-volume recovery and verification
-- anomaly lifecycle schema verification in PostgreSQL
-- isolated fresh-database execution of `001_schema.sql` followed by `002_alerting_anomaly_lifecycle.sql`
-- fresh-database verification of lifecycle columns, constraint, and index
-- cleanup of the temporary PostgreSQL test container after verification
+- persisted pending alert
+- successful Gmail SMTP acceptance
+- real Gmail inbox delivery
+- `sent` + `sent_at`
+- alert failure path
+- environment-based email routing
+- no hardcoded personal email in committed workflow export
+- empty n8n `pinData` in committed workflow export
+- n8n persistent-volume restoration
+- anomaly lifecycle columns/constraint/index
+- isolated fresh PostgreSQL bootstrap
+- ordered `001 → 002` migration execution
+- temporary test cleanup
+- checkpoint hygiene inspection
 
-A capability is treated as tested only after its result has been inspected.
+A capability is **TESTED only after its result is inspected**.
+
+---
+
+## Known Technical Debt
+
+The current Part-02 implementation intentionally retains several known gaps that must be resolved before later milestones.
+
+### Source-Safe Previous Quote
+
+The current extreme-movement previous-quote query is not yet provider/source-scoped.
+
+**Required before second-provider operation.**
+
+### Timestamp / Timezone / Precision Provenance
+
+The current adapter does not yet preserve the full raw timestamp and explicit timezone/precision semantics required by the planned canonical research representation.
+
+### Provider Instrument Semantics
+
+`provider_instrument_id` exists in the schema but is not yet populated with verified Alpha Vantage-specific identifier semantics.
+
+### Threshold / Configuration Provenance
+
+Current thresholds are hardcoded operational assumptions. Future rules must be versioned and retain severity-specific threshold/config provenance.
+
+### Normalized vs Inserted Counts
+
+`records_processed` currently represents normalized output count.
+
+Future observability may separate:
+
+```text
+records_normalized
+records_inserted
+records_duplicate
+records_rejected
+```
+
+### Lifecycle Transition Manager
+
+The database schema is ready, but transition legality is not yet enforced by an operator workflow/API.
 
 ---
 
 ## MSc Thesis Direction
 
-The platform is also being evolved into an MSc thesis artifact focused on operational FX market-data quality.
-
-The proposed research direction is:
+The platform is being evolved into an MSc thesis artifact titled:
 
 **Evaluating Adaptive Anomaly Detection and Cross-Source Reconciliation for Operational FX Market Data Quality**
 
-The research core is planned around two questions:
+The research layer remains separate from current runtime claims.
 
-- whether temporally aligned cross-source evidence improves classification of injected source-specific data-quality faults compared with single-source monitoring
-- how adaptive statistical anomaly detection compares with an equivalent fixed statistical baseline under changing normal FX conditions and controlled price/spread faults
+### Research Question 1
 
-The research layer is planned to remain independently executable from the current n8n operational runtime.
+> **Does temporally aligned cross-source evidence improve the classification of injected source-specific data-quality faults in FX market data compared with single-source monitoring?**
 
-Ground truth will come from controlled fault injection rather than provider disagreement.
+### Research Question 2
 
-Research data must remain zero-cost. Candidate historical sources must pass a compatibility and data-use pilot before adoption.
+> **How does adaptive statistical anomaly detection compare with an equivalent fixed statistical baseline under changing reference FX market conditions and controlled price/spread faults?**
+
+### Core Research Boundaries
+
+- Cross-source disagreement is **contextual evidence, not ground truth**.
+- Ground truth comes from **controlled fault injection**.
+- Non-injected historical observations are **reference observations**, not assumed universally fault-free.
+- Structural validity remains deterministic.
+- Freshness/staleness remains an operational policy.
+- The fixed-versus-adaptive statistical comparison focuses primarily on:
+  - spread
+  - price movement
+- The primary adaptive approach is a past-only rolling median/MAD detector.
+- The fixed baseline uses equivalent robust statistics calibrated chronologically and frozen before evaluation.
+- Random row-level train/test splitting is not used for the main time-series experiment.
+- Calibration → protocol/config freeze → chronological held-out evaluation.
+- Reconciliation must explicitly define:
+  - causal vs symmetric matching
+  - maximum tolerance
+  - tie handling
+  - one-to-one vs reusable matching
+  - unmatched behaviour
+  - provider age
+  - match coverage/confidence
+- Operational claims must not use future look-ahead.
+- Historical files must not be assigned fabricated live arrival-time semantics.
+
+### 2×2 Experimental Design
+
+| | Single-source | Cross-source |
+|---|---|---|
+| Fixed | System A | System C |
+| Adaptive | System B | System D |
+
+### Research Data
+
+The thesis has a zero-cost research-data requirement.
+
+**TrueFX and Dukascopy remain candidate sources only.**
+
+The final pair will be accepted only after a five-day EUR/USD compatibility pilot verifies:
+
+- source schema
+- timestamp semantics
+- UTC normalization feasibility
+- bid/ask validity
+- duplicate behaviour
+- overlapping market coverage
+- temporal matching feasibility
+- natural midpoint divergence
+- natural spread divergence
+- data-use suitability
+
+A negative pilot result is valid and may lead to selection of another research-suitable zero-cost pair.
+
+---
+
+## Engineering and Research Independence
+
+The platform is provider-neutral and institution-independent.
+
+Technology selection is based on:
+
+- concrete responsibility
+- simpler alternative
+- measurable success criterion
+- verification plan
+- dependency order
+- actual evidence
+
+Public industry documentation may inform general engineering patterns, but it is not a design authority and does not prove any proprietary architecture.
 
 ---
 
 ## Development Roadmap
 
-### Near-Term
+The current engineering order remains:
 
-- implement `FX Anomaly Lifecycle Manager`
-- validate lifecycle API requests
-- enforce valid lifecycle transitions
-- add operator-facing acknowledge/resolve actions
-- make instruments and operational rules configuration-driven
-- improve lifecycle auditability
+```text
+Lifecycle Manager
+      ↓
+Configuration-driven rules + reference data
+      ↓
+Provider abstraction
+      ↓
+Second source
+      ↓
+Temporal reconciliation
+      ↓
+Research core
+      ↓
+Observability / BFF / productisation
+      ↓
+Extended streaming, analytics, resilience, security and platform labs
+```
 
-### Provider and Reconciliation Layer
+### 1. Lifecycle Manager
 
-- introduce provider abstraction
-- integrate a second compatible source
-- implement temporal alignment
-- implement actual cross-source reconciliation
-- add provider-health evidence
+Exact next implementation block:
 
-### Research Layer
+- operator action input
+- anomaly/action validation
+- legal transition enforcement
+- `open → acknowledged → resolved`
+- timestamp/resolution handling
+- deterministic success/failure tests
+- database inspection
+- auditability
+- cleanup
+- Git verification
 
-- perform a zero-cost dataset compatibility pilot
-- add Python research modules
-- implement a fixed robust statistical baseline
-- implement a rolling median/MAD adaptive detector
-- implement deterministic controlled fault injection
-- use chronological calibration → freeze → held-out evaluation
-- compare single-source vs cross-source monitoring
-- compare fixed vs adaptive statistical monitoring
+### 2. Configuration and Reference Data
 
-### Reliability and Observability
+- configuration-driven instruments
+- versioned operational thresholds
+- severity-specific threshold provenance
+- effective-dated canonical/provider mappings
+- explicit provider instrument semantics
 
-- add Prometheus metrics
-- add Grafana dashboards
-- introduce deterministic automated tests and CI
-- add retry/backoff for recoverable failures
-- implement completeness/gap detection
-- add replay and DLQ/circuit-breaker patterns where justified
+### 3. Provider Abstraction
 
-### Extended Platform
+- provider-neutral contracts
+- source-specific adapters
+- source-safe quote history semantics
+- provider health
 
-Additional technologies such as Go, Kafka, Flink, ClickHouse, MinIO, Spark, Trino, Redis, MongoDB, C++, Kubernetes, GitOps, and an operator-facing React application will be introduced only when each has a concrete engineering or research responsibility.
+### 4. Second Source and Temporal Reconciliation
 
-AI/LLM components remain optional future work for incident explanation and operational assistance. They will not determine whether market data is valid.
+- second compatible provider/source
+- temporal alignment
+- causal matching policy
+- divergence evidence
+- coverage / unmatched metrics
+
+Do not describe two-source ingestion as reconciliation until temporal comparison exists.
+
+### 5. Research Core
+
+- dataset compatibility pilot
+- Python adapters
+- canonical research representation
+- fixed robust baseline
+- rolling median/MAD adaptive detector
+- deterministic fault injection
+- 2×2 experiment
+- leakage-safe chronological evaluation
+- statistical analysis and sensitivity reporting
+
+### 6. Observability and Product Boundary
+
+- Prometheus / Grafana
+- OpenTelemetry path
+- Platform API / BFF
+- React/TypeScript console
+- typed APIs/contracts
+- role-controlled operator actions
+
+### 7. Extended Platform
+
+Only after simpler verified baselines justify them:
+
+- Kafka / Schema Registry / Kafka Connect
+- Flink
+- ClickHouse
+- MinIO / Parquet / Iceberg
+- Spark / Trino / dbt
+- Redis / MongoDB where justified
+- Temporal / Airflow
+- C++ replay
+- Kubernetes / Helm / Argo CD
+- Vault / OIDC / fine-grained authorization
+- progressive delivery / autoscaling
+- load / chaos / recovery labs
+- advanced observability
+- developer portal / governance
+- experiment registry / dataset versioning
+- optional advisory AIOps
+
+---
+
+## Definition of Done
+
+A milestone is complete only when:
+
+1. implementation exists
+2. key success and failure paths are tested
+3. relevant runtime/database/log/metric/trace/container/browser evidence is inspected
+4. temporary test artifacts are cleaned
+5. `git diff` / `git status` and secret checks are inspected
+6. committed `HEAD` equals the tested state
+7. push is confirmed
+8. documentation/checkpoint agrees with that exact state
+
+If those conditions are not satisfied, the capability remains at a lower status.
+
+---
+
+## Checkpoint and Source-of-Truth Discipline
+
+For implementation status, stronger evidence wins:
+
+```text
+Runtime / inspected execution evidence
+        >
+Committed repository HEAD / verified checkpoint
+        >
+Current technical guide
+        >
+MSc proposal for research goals and planned architecture
+        >
+older documents/history
+```
+
+The MSc proposal does **not** upgrade runtime status.
+
+The Part-02 checkpoint is historical committed evidence and should not be rewritten merely because later documentation or research framing changes.
+
+Current repository HEAD/push state beyond the verified checkpoint must be re-checked when development resumes.
+
+---
+
+## Current Next Step
+
+> **Implement the FX Anomaly Lifecycle Manager.**
+
+Success requires legal transition enforcement, deterministic success/failure coverage, inspected PostgreSQL evidence, cleanup, Git verification, and documentation synchronized to the tested committed state.
