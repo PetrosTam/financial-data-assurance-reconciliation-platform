@@ -23,7 +23,7 @@ The repository distinguishes implementation status explicitly:
 - **OPTIONAL** — future/laboratory capability.
 - **UNKNOWN** — evidence is insufficient.
 
-### Verified End-of-Part-02 State
+### Current Verified State
 
 | Capability | Status | Evidence / interpretation |
 |---|---|---|
@@ -35,9 +35,10 @@ The repository distinguishes implementation status explicitly:
 | Alert delivery state persistence | **TESTED** | `pending`, `sent`, `failed`; `sent_at` on success |
 | Environment-based email routing | **TESTED** | Sender/recipient loaded from environment variables |
 | n8n state persistence | **TESTED** | Named-volume mount and restoration verified |
-| Anomaly lifecycle database schema | **TESTED** | `open` / `acknowledged` / `resolved`, constraint and index verified |
-| Fresh PostgreSQL bootstrap | **TESTED** | `001_schema.sql` then `002_alerting_anomaly_lifecycle.sql` verified |
-| Operator lifecycle manager | **PLANNED** | Transition workflow/API not yet implemented |
+| Anomaly lifecycle database schema | **TESTED** | `open` / `acknowledged` / `resolved`, lifecycle columns, constraint and index verified |
+| Lifecycle audit trail | **TESTED** | Atomic `anomaly_lifecycle_events` persistence with transition constraints, workflow/execution provenance, and `ON DELETE RESTRICT` FK |
+| Operator lifecycle manager | **TESTED** | Authenticated n8n Webhook path validates requests, enforces legal transitions, updates lifecycle timestamps/reason, blocks stale writes, and returns controlled HTTP responses |
+| Fresh PostgreSQL bootstrap | **TESTED** | Isolated PostgreSQL 16 bootstrap verified ordered `001 → 002 → 003` execution and resulting schema |
 | Provider abstraction | **PLANNED** | Canonical output exists, but only Alpha Vantage integration is implemented |
 | Second source | **PLANNED** | Not yet integrated |
 | Temporal cross-source reconciliation | **PLANNED** | Do not call current ingestion “reconciliation” |
@@ -67,7 +68,8 @@ The current system provides a small but verified operational foundation for:
 - critical alert generation
 - real email delivery
 - delivery-state persistence
-- lifecycle-ready anomaly schema
+- lifecycle-managed anomalies with authenticated operator actions
+- durable lifecycle transition audit evidence
 - reproducible local database bootstrap
 - secure configuration and checkpoint discipline
 
@@ -293,7 +295,7 @@ These are planned hardening items before multi-provider research and reconciliat
 
 ## PostgreSQL Data Model
 
-The current database contains four core operational tables.
+The current database contains five core operational tables.
 
 ### `fx_quotes`
 
@@ -370,6 +372,32 @@ message
 sent_at
 created_at
 ```
+
+### `anomaly_lifecycle_events`
+
+Stores durable evidence for successful anomaly lifecycle transitions.
+
+Representative fields:
+
+```text
+anomaly_id
+action
+from_status
+to_status
+resolution_reason
+workflow_name
+execution_id
+created_at
+```
+
+The table enforces the currently supported transition model:
+
+```text
+open → acknowledged
+acknowledged → resolved
+```
+
+It also uses a foreign key to `anomalies(id)` with `ON DELETE RESTRICT` and an index on `(anomaly_id, created_at DESC)`.
 
 ---
 
@@ -641,7 +669,7 @@ No real personal alert address should be committed in workflow exports.
 
 ---
 
-## Anomaly Lifecycle Schema
+## Anomaly Lifecycle Management
 
 Migration:
 
@@ -649,18 +677,13 @@ Migration:
 sql/002_alerting_anomaly_lifecycle.sql
 ```
 
-adds:
+provides the lifecycle fields:
 
 ```text
 status
 acknowledged_at
-resolution_reason
-```
-
-The base schema already contains:
-
-```text
 resolved_at
+resolution_reason
 ```
 
 Current allowed states:
@@ -671,40 +694,82 @@ acknowledged
 resolved
 ```
 
-The migration also creates:
+Audit migration:
 
 ```text
-idx_anomalies_status_detected_at
+sql/003_anomaly_lifecycle_audit.sql
 ```
 
-### Current Lifecycle Status
-
-The lifecycle schema is **TESTED**.
-
-The operator transition manager is **not implemented**.
-
-The exact next feature is:
+creates:
 
 ```text
-FX Anomaly Lifecycle Manager
+anomaly_lifecycle_events
 ```
 
-It must implement:
+with constrained `acknowledge` / `resolve` actions, legal `from_status → to_status` combinations, workflow/execution provenance, and an `ON DELETE RESTRICT` relationship to the parent anomaly.
 
-- anomaly/action validation
-- legal transition checks
-- `open → acknowledged → resolved`
-- timestamp updates
-- resolution reason
-- deterministic success tests
-- invalid-transition tests
-- missing-ID / malformed-input tests
-- database inspection
-- auditability
-- cleanup
-- Git diff/status/secret verification before completion
+### FX Anomaly Lifecycle Manager
 
-Future case-management states such as `investigating`, `mitigated`, or `reopened` require a separate migration/API/UI change and are not current Part-02 states.
+The operator lifecycle workflow is **TESTED**.
+
+Current operational entry path:
+
+```text
+Webhook
+  ↓
+Extract Webhook Request
+  ↓
+Validate Lifecycle Request
+  ↓
+Read Current Anomaly
+  ↓
+Validate Legal Transition
+  ↓
+Apply Lifecycle Transition
+  ↓
+Verify Transition Applied
+  ↓
+Respond to Webhook
+```
+
+Node error outputs route through:
+
+```text
+Build Webhook Error Response
+  ↓
+Respond Lifecycle Error
+```
+
+The current operator endpoint uses n8n Header Auth and accepts lifecycle commands containing:
+
+```text
+anomaly_id
+action
+resolution_reason
+```
+
+The workflow validates request shape before database access, allows only:
+
+```text
+open → acknowledged
+acknowledged → resolved
+```
+
+and uses the previously read state as an optimistic-concurrency precondition on the update. A stale-state test verified that the mutation was rejected and no false lifecycle audit event was created.
+
+Verified HTTP behavior includes:
+
+```text
+403  authentication denial
+400  invalid action / missing required resolution reason
+404  anomaly not found
+409  illegal lifecycle transition
+200  successful acknowledge / resolve
+```
+
+Successful state mutation and audit insertion occur in one SQL statement so a successful lifecycle update and its corresponding audit event remain coupled.
+
+Future case-management states such as `investigating`, `mitigated`, or `reopened` require a separate migration/API/UI change and are not current states.
 
 ---
 
@@ -716,9 +781,11 @@ A fresh PostgreSQL volume automatically applies:
 001_schema.sql
       ↓
 002_alerting_anomaly_lifecycle.sql
+      ↓
+003_anomaly_lifecycle_audit.sql
 ```
 
-Docker Compose mounts both under:
+Docker Compose mounts all three under:
 
 ```text
 /docker-entrypoint-initdb.d/
@@ -726,15 +793,15 @@ Docker Compose mounts both under:
 
 An isolated PostgreSQL 16 bootstrap test verified:
 
-- `001_schema.sql` executed
-- `002_alerting_anomaly_lifecycle.sql` executed
+- ordered `001 → 002 → 003` execution
 - lifecycle columns exist
 - `status` defaults to `open`
-- `anomalies_status_check` exists
-- allowed states are correct
+- `anomalies_status_check` allows `open`, `acknowledged`, `resolved`
 - `idx_anomalies_status_detected_at` exists
+- `anomaly_lifecycle_events` exists
+- lifecycle-event primary key, transition checks, `ON DELETE RESTRICT` FK, and `(anomaly_id, created_at DESC)` index exist
 - initialization completed without relevant `ERROR` / `FATAL`
-- the temporary test container was removed afterward
+- the temporary bootstrap container was removed afterward
 
 ---
 
@@ -767,7 +834,8 @@ Current engineering rules include:
 - SMTP passwords stay outside Git
 - database secrets stay outside Git
 - `.env` and `.env.*` remain ignored except safe `.env.example`
-- n8n credentials hold provider/SMTP authentication
+- n8n credentials hold provider/SMTP authentication and the lifecycle Webhook Header Auth secret
+- lifecycle requests are authenticated before the domain path executes
 - dynamic SQL uses parameterization where applicable
 - workflow exports are inspected for:
   - personal emails
@@ -866,8 +934,10 @@ Current Part-02 repository structure:
 │   └── architecture.md
 ├── sql/
 │   ├── 001_schema.sql
-│   └── 002_alerting_anomaly_lifecycle.sql
+│   ├── 002_alerting_anomaly_lifecycle.sql
+│   └── 003_anomaly_lifecycle_audit.sql
 ├── workflows/
+│   ├── fx-anomaly-lifecycle-manager.json
 │   ├── fx-workflow-error-handler.json
 │   └── multi-instrument-fx-operations-pipeline-alpha-vantage.json
 ├── .env.example
@@ -906,8 +976,16 @@ Verified evidence includes:
 - empty n8n `pinData` in committed workflow export
 - n8n persistent-volume restoration
 - anomaly lifecycle columns/constraint/index
+- authenticated lifecycle Webhook denial (`403`)
+- malformed/invalid lifecycle requests (`400`)
+- missing anomaly handling (`404`)
+- illegal lifecycle transition handling (`409`)
+- successful authenticated `open → acknowledged → resolved` lifecycle (`200`)
+- persisted acknowledgement/resolution timestamps and resolution reason
+- optimistic-concurrency stale-write rejection
+- atomic lifecycle audit events with workflow/execution provenance
 - isolated fresh PostgreSQL bootstrap
-- ordered `001 → 002` migration execution
+- ordered `001 → 002 → 003` migration execution
 - temporary test cleanup
 - checkpoint hygiene inspection
 
@@ -950,9 +1028,11 @@ records_duplicate
 records_rejected
 ```
 
-### Lifecycle Transition Manager
+### Lifecycle Endpoint Security Boundary
 
-The database schema is ready, but transition legality is not yet enforced by an operator workflow/API.
+The current lifecycle manager uses n8n Header Auth as a local/operator control boundary. This is sufficient for the current verified milestone, but it is not the final product security architecture.
+
+Before browser-facing productisation, privileged lifecycle actions should move behind the planned Platform API/BFF with explicit authentication, authorization, validation, and audit controls. Raw webhook execution data can include request headers, so execution-data retention and secret exposure must be reviewed before any broader deployment.
 
 ---
 
@@ -1049,7 +1129,7 @@ Public industry documentation may inform general engineering patterns, but it is
 The current engineering order remains:
 
 ```text
-Lifecycle Manager
+Lifecycle Manager [TESTED]
       ↓
 Configuration-driven rules + reference data
       ↓
@@ -1066,22 +1146,25 @@ Observability / BFF / productisation
 Extended streaming, analytics, resilience, security and platform labs
 ```
 
-### 1. Lifecycle Manager
+### 1. Lifecycle Manager — TESTED
 
-Exact next implementation block:
+Verified scope includes:
 
-- operator action input
+- authenticated operator action input
 - anomaly/action validation
 - legal transition enforcement
 - `open → acknowledged → resolved`
-- timestamp/resolution handling
-- deterministic success/failure tests
+- acknowledgement/resolution timestamp handling
+- required resolution reason for `resolve`
+- deterministic HTTP success/failure coverage
+- optimistic-concurrency stale-write protection
+- atomic lifecycle audit persistence
 - database inspection
-- auditability
-- cleanup
-- Git verification
+- isolated fresh-bootstrap verification
+- controlled fixture cleanup
+- workflow export and secret-pattern inspection
 
-### 2. Configuration and Reference Data
+### 2. Configuration and Reference Data — NEXT
 
 - configuration-driven instruments
 - versioned operational thresholds
@@ -1193,6 +1276,8 @@ Current repository HEAD/push state beyond the verified checkpoint must be re-che
 
 ## Current Next Step
 
-> **Implement the FX Anomaly Lifecycle Manager.**
+> **Implement configuration-driven rules and reference data.**
 
-Success requires legal transition enforcement, deterministic success/failure coverage, inspected PostgreSQL evidence, cleanup, Git verification, and documentation synchronized to the tested committed state.
+The next block should externalize operational thresholds, preserve severity/configuration provenance, define effective-dated instrument/provider mappings, and make provider instrument semantics explicit before provider abstraction and second-source work.
+
+The Lifecycle Manager capability itself is runtime **TESTED**. Overall milestone completion still follows the project Definition of Done, including committed/pushed tested state and synchronized Guide/checkpoint documentation.
