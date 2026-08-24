@@ -12,6 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
       - ./sql/002_alerting_anomaly_lifecycle.sql:/docker-entrypoint-initdb.d/002_alerting_anomaly_lifecycle.sql:ro
+      - ./sql/003_anomaly_lifecycle_audit.sql:/docker-entrypoint-initdb.d/003_anomaly_lifecycle_audit.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U fxops -d fxops"]
       interval: 5s

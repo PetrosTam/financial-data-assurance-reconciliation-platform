@@ -1,0 +1,349 @@
+{
+  "name": "FX Anomaly Lifecycle Manager",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (items.length !== 1) {\n  throw new Error(\n    `Lifecycle request must contain exactly 1 item; received ${items.length}.`\n  );\n}\n\nconst input = items[0].json ?? {};\n\n// Validate anomaly_id.\n// Accept a positive integer or a decimal string such as \"123\".\nconst rawId = input.anomaly_id;\n\nlet anomalyId;\n\nif (typeof rawId === 'number') {\n  anomalyId = rawId;\n} else if (\n  typeof rawId === 'string' &&\n  /^\\d+$/.test(rawId.trim())\n) {\n  anomalyId = Number(rawId.trim());\n} else {\n  throw new Error('anomaly_id must be a positive integer.');\n}\n\nif (!Number.isSafeInteger(anomalyId) || anomalyId <= 0) {\n  throw new Error('anomaly_id must be a positive integer.');\n}\n\n// Validate action.\nif (typeof input.action !== 'string') {\n  throw new Error(\n    'action is required and must be either \"acknowledge\" or \"resolve\".'\n  );\n}\n\nconst action = input.action.trim();\n\nif (!['acknowledge', 'resolve'].includes(action)) {\n  throw new Error(\n    'action must be either \"acknowledge\" or \"resolve\".'\n  );\n}\n\n// Validate resolution_reason according to action.\nlet resolutionReason = input.resolution_reason ?? null;\n\nif (action === 'resolve') {\n  if (\n    typeof resolutionReason !== 'string' ||\n    resolutionReason.trim().length === 0\n  ) {\n    throw new Error(\n      'resolution_reason is required when action is \"resolve\".'\n    );\n  }\n\n  resolutionReason = resolutionReason.trim();\n} else {\n  if (\n    resolutionReason !== null &&\n    resolutionReason !== undefined &&\n    String(resolutionReason).trim().length > 0\n  ) {\n    throw new Error(\n      'resolution_reason is only allowed when action is \"resolve\".'\n    );\n  }\n\n  resolutionReason = null;\n}\n\nreturn [\n  {\n    json: {\n      anomaly_id: anomalyId,\n      action,\n      resolution_reason: resolutionReason\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -528
+      ],
+      "id": "57a08cf4-7f02-4eda-83f9-98ddee4e3d95",
+      "name": "Validate Lifecycle Request",
+      "onError": "continueErrorOutput",
+      "notes": "Routes failures to the HTTP error-response branch."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    requested.id AS requested_anomaly_id,\n    a.id AS anomaly_id,\n    a.symbol,\n    a.anomaly_type,\n    a.severity,\n    a.status AS current_status,\n    a.acknowledged_at,\n    a.resolved_at,\n    a.resolution_reason,\n    a.detected_at\nFROM (\n    SELECT $1::bigint AS id\n) AS requested\nLEFT JOIN anomalies AS a\n    ON a.id = requested.id;",
+        "options": {
+          "queryReplacement": "={{ $json.anomaly_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        624,
+        -672
+      ],
+      "id": "f8389ef8-b612-43c4-9b9d-e20351ad5608",
+      "name": "Read Current Anomaly",
+      "credentials": {
+        "postgres": {
+          "id": "5JJ2CC2NS9rUYWmZ",
+          "name": "FX Ops PostgreSQL"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Routes failures to the HTTP error-response branch."
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (items.length !== 1) {\n  throw new Error(\n    `Expected exactly 1 database result; received ${items.length}.`\n  );\n}\n\nconst current = items[0].json ?? {};\n\n// Recover the already validated request.\n// We deliberately use the validated node rather than the original test input.\nconst request = $('Validate Lifecycle Request').first().json;\n\nconst requestedId = request.anomaly_id;\nconst action = request.action;\nconst resolutionReason = request.resolution_reason ?? null;\n\n// The LEFT JOIN in Read Current Anomaly guarantees one row.\n// A null anomaly_id therefore means the requested anomaly does not exist.\nif (current.anomaly_id === null || current.anomaly_id === undefined) {\n  throw new Error(`Anomaly ${requestedId} was not found.`);\n}\n\nconst currentStatus = current.current_status;\n\nif (!['open', 'acknowledged', 'resolved'].includes(currentStatus)) {\n  throw new Error(\n    `Anomaly ${requestedId} has unsupported lifecycle status \"${currentStatus}\".`\n  );\n}\n\nlet targetStatus;\n\nif (action === 'acknowledge') {\n  if (currentStatus !== 'open') {\n    throw new Error(\n      `Illegal lifecycle transition: \"${currentStatus}\" cannot be acknowledged.`\n    );\n  }\n\n  targetStatus = 'acknowledged';\n}\n\nif (action === 'resolve') {\n  if (currentStatus !== 'acknowledged') {\n    throw new Error(\n      `Illegal lifecycle transition: \"${currentStatus}\" cannot be resolved.`\n    );\n  }\n\n  targetStatus = 'resolved';\n}\n\nif (!targetStatus) {\n  throw new Error(`Unsupported lifecycle action \"${action}\".`);\n}\n\nreturn [\n  {\n    json: {\n      anomaly_id: Number(requestedId),\n      action,\n      expected_status: currentStatus,\n      target_status: targetStatus,\n      resolution_reason: resolutionReason,\n      symbol: current.symbol,\n      anomaly_type: current.anomaly_type,\n      severity: current.severity\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        -784
+      ],
+      "id": "cf30d820-2c9f-49c3-a4bb-4f15618129ec",
+      "name": "Validate Legal Transition",
+      "onError": "continueErrorOutput",
+      "notes": "Routes failures to the HTTP error-response branch."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH request AS (\n    SELECT\n        $1::bigint AS anomaly_id,\n        $2::text AS expected_status,\n        $3::text AS target_status,\n        NULLIF($4::text, '__NO_RESOLUTION_REASON__') AS resolution_reason,\n        $5::text AS action,\n        $6::text AS workflow_name,\n        $7::text AS execution_id\n),\nupdated AS (\n    UPDATE anomalies AS a\n    SET\n        status = r.target_status,\n\n        acknowledged_at = CASE\n            WHEN r.target_status = 'acknowledged'\n                THEN COALESCE(a.acknowledged_at, NOW())\n            ELSE a.acknowledged_at\n        END,\n\n        resolved_at = CASE\n            WHEN r.target_status = 'resolved'\n                THEN NOW()\n            ELSE a.resolved_at\n        END,\n\n        resolution_reason = CASE\n            WHEN r.target_status = 'resolved'\n                THEN r.resolution_reason\n            ELSE a.resolution_reason\n        END\n\n    FROM request AS r\n\n    WHERE a.id = r.anomaly_id\n      AND a.status = r.expected_status\n\n    RETURNING\n        a.id,\n        a.symbol,\n        a.anomaly_type,\n        a.severity,\n        a.status,\n        a.acknowledged_at,\n        a.resolved_at,\n        a.resolution_reason\n),\naudited AS (\n    INSERT INTO anomaly_lifecycle_events (\n        anomaly_id,\n        action,\n        from_status,\n        to_status,\n        resolution_reason,\n        workflow_name,\n        execution_id\n    )\n    SELECT\n        u.id,\n        r.action,\n        r.expected_status,\n        r.target_status,\n        CASE\n            WHEN r.action = 'resolve'\n                THEN r.resolution_reason\n            ELSE NULL\n        END,\n        r.workflow_name,\n        r.execution_id\n    FROM request AS r\n    JOIN updated AS u\n        ON TRUE\n    RETURNING\n        id AS lifecycle_event_id,\n        created_at AS lifecycle_event_created_at\n)\n\nSELECT\n    r.anomaly_id AS requested_anomaly_id,\n    r.expected_status,\n    r.target_status,\n    (u.id IS NOT NULL) AS transition_applied,\n    u.id AS anomaly_id,\n    u.symbol,\n    u.anomaly_type,\n    u.severity,\n    u.status,\n    u.acknowledged_at,\n    u.resolved_at,\n    u.resolution_reason,\n    ev.lifecycle_event_id,\n    ev.lifecycle_event_created_at\nFROM request AS r\nLEFT JOIN updated AS u\n    ON TRUE\nLEFT JOIN audited AS ev\n    ON TRUE;",
+        "options": {
+          "queryReplacement": "={{ $json.anomaly_id }}, {{ $json.expected_status }}, {{ $json.target_status }}, {{ $json.resolution_reason ?? '__NO_RESOLUTION_REASON__' }}, {{ $json.action }}, {{ $workflow.name }}, {{ $execution.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        976,
+        -912
+      ],
+      "id": "8e3c4443-0484-45dd-a7eb-09f94312d72c",
+      "name": "Apply Lifecycle Transition",
+      "credentials": {
+        "postgres": {
+          "id": "5JJ2CC2NS9rUYWmZ",
+          "name": "FX Ops PostgreSQL"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Routes failures to the HTTP error-response branch."
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (items.length !== 1) {\n  throw new Error(\n    `Expected exactly 1 transition result; received ${items.length}.`\n  );\n}\n\nconst result = items[0].json ?? {};\n\nif (result.transition_applied !== true) {\n  throw new Error(\n    `Lifecycle transition was not applied for anomaly ${result.requested_anomaly_id}; ` +\n    `expected current status \"${result.expected_status}\". ` +\n    'The anomaly may have changed concurrently.'\n  );\n}\n\nif (\n  result.anomaly_id === null ||\n  result.anomaly_id === undefined\n) {\n  throw new Error(\n    `Lifecycle transition reported success without an anomaly row.`\n  );\n}\n\nif (result.status !== result.target_status) {\n  throw new Error(\n    `Lifecycle transition verification failed: expected target status ` +\n    `\"${result.target_status}\" but received \"${result.status}\".`\n  );\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        -1024
+      ],
+      "id": "03cf56cb-2117-4714-8671-973dbffe2d97",
+      "name": "Verify Transition Applied",
+      "onError": "continueErrorOutput",
+      "notes": "Routes failures to the HTTP error-response branch."
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fx-anomaly-lifecycle",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -400
+      ],
+      "id": "a0ec1953-e29d-4cf5-831d-fae2eb8148a6",
+      "name": "Webhook",
+      "webhookId": "f88bc64c-1e90-4570-a525-bc5ae88f973e",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "oXT02DHxGmZxQv8q",
+          "name": "FX Lifecycle Webhook Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (items.length !== 1) {\n  throw new Error(\n    `Webhook request must contain exactly 1 item; received ${items.length}.`\n  );\n}\n\nconst input = items[0].json ?? {};\nconst body = input.body;\n\nif (\n  body === null ||\n  typeof body !== 'object' ||\n  Array.isArray(body)\n) {\n  throw new Error('Webhook request body must be a JSON object.');\n}\n\nreturn [\n  {\n    json: {\n      anomaly_id: body.anomaly_id,\n      action: body.action,\n      resolution_reason: body.resolution_reason ?? null\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        -400
+      ],
+      "id": "2593d9d5-cd5e-4a55-a15e-a043368fc0f2",
+      "name": "Extract Webhook Request",
+      "onError": "continueErrorOutput",
+      "notes": "Routes failures to the HTTP error-response branch."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: true,\n  anomaly_id: Number($json.anomaly_id),\n  status: $json.status,\n  acknowledged_at: $json.acknowledged_at ?? null,\n  resolved_at: $json.resolved_at ?? null,\n  resolution_reason: $json.resolution_reason ?? null,\n  lifecycle_event_id:\n    $json.lifecycle_event_id == null\n      ? null\n      : Number($json.lifecycle_event_id),\n  lifecycle_event_created_at:\n    $json.lifecycle_event_created_at ?? null\n} }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1328,
+        -1120
+      ],
+      "id": "2e7aced8-3854-49e8-b210-81ed7ff56638",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (items.length !== 1) {\n  throw new Error(\n    `Expected exactly 1 error item; received ${items.length}.`\n  );\n}\n\nconst input = items[0].json ?? {};\n\nconst rawError =\n  typeof input.error === 'string'\n    ? input.error\n    : 'Unexpected lifecycle error.';\n\n// Remove n8n implementation detail such as \"[line 22]\"\n// from the API-visible error message.\nconst message = rawError\n  .replace(/\\s*\\[line \\d+\\]\\s*$/i, '')\n  .trim();\n\nlet httpStatus = 500;\nlet errorCode = 'internal_error';\n\nif (/^Anomaly \\d+ was not found\\.$/.test(message)) {\n  httpStatus = 404;\n  errorCode = 'anomaly_not_found';\n} else if (\n  message.startsWith('Illegal lifecycle transition:') ||\n  /^\"(open|acknowledged|resolved)\" cannot be (acknowledged|resolved)\\.$/.test(message)\n) {\n  httpStatus = 409;\n  errorCode = 'illegal_transition';\n} else if (\n  message.includes('The anomaly may have changed concurrently.')\n) {\n  httpStatus = 409;\n  errorCode = 'concurrent_state_change';\n} else if (\n  message.startsWith('anomaly_id must') ||\n  message.startsWith('action is required') ||\n  message.startsWith('action must') ||\n  message.startsWith('resolution_reason is required') ||\n  message.startsWith('resolution_reason is only allowed') ||\n  message.startsWith('Lifecycle request must') ||\n  message.startsWith('Webhook request body must')\n) {\n  httpStatus = 400;\n  errorCode = 'invalid_request';\n}\n\nreturn [\n  {\n    json: {\n      success: false,\n      http_status: httpStatus,\n      error_code: errorCode,\n      error_message: message\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        -384
+      ],
+      "id": "686ef7d9-a1cf-4800-91ac-2807b699c70e",
+      "name": "Build Webhook Error Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: false,\n  error_code: $json.error_code,\n  error_message: $json.error_message\n} }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1536,
+        -384
+      ],
+      "id": "d69e19fe-e8c0-436d-83a1-f991c479cb28",
+      "name": "Respond Lifecycle Error"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Validate Lifecycle Request": {
+      "main": [
+        [
+          {
+            "node": "Read Current Anomaly",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Webhook Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Current Anomaly": {
+      "main": [
+        [
+          {
+            "node": "Validate Legal Transition",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Webhook Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Legal Transition": {
+      "main": [
+        [
+          {
+            "node": "Apply Lifecycle Transition",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Webhook Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Lifecycle Transition": {
+      "main": [
+        [
+          {
+            "node": "Verify Transition Applied",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Webhook Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Webhook Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Webhook Request": {
+      "main": [
+        [
+          {
+            "node": "Validate Lifecycle Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Webhook Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Transition Applied": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Webhook Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Webhook Error Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Lifecycle Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "dd5fadd3-7f76-4470-b518-a7cfafde1ced",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e0cfd3455c618dae5c928e5689f8c48e896705e324884dcb688a94501a2d3b9e"
+  },
+  "nodeGroups": [],
+  "id": "Lu2fEm2xUONaErHO",
+  "tags": []
+}
