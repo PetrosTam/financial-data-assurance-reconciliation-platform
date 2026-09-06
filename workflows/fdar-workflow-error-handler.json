@@ -1,5 +1,5 @@
 {
-  "name": "FX Workflow Error Handler",
+  "name": "FDAR Workflow Error Handler",
   "nodes": [
     {
       "parameters": {},
@@ -132,7 +132,7 @@
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
-          "name": "FX Ops PostgreSQL"
+          "name": "FDAR PostgreSQL"
         }
       }
     }

@@ -1,5 +1,5 @@
 {
-  "name": "Multi-Instrument FX Operations Pipeline - Alpha Vantage",
+  "name": "FDAR FX Market Data Pipeline - Alpha Vantage",
   "nodes": [
     {
       "parameters": {
@@ -170,7 +170,7 @@
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
-          "name": "FX Ops PostgreSQL"
+          "name": "FDAR PostgreSQL"
         }
       }
     },
@@ -324,7 +324,7 @@
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
-          "name": "FX Ops PostgreSQL"
+          "name": "FDAR PostgreSQL"
         }
       }
     },
@@ -449,7 +449,7 @@
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
-          "name": "FX Ops PostgreSQL"
+          "name": "FDAR PostgreSQL"
         }
       }
     },
@@ -593,7 +593,7 @@
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
-          "name": "FX Ops PostgreSQL"
+          "name": "FDAR PostgreSQL"
         }
       }
     },
@@ -616,7 +616,7 @@
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
-          "name": "FX Ops PostgreSQL"
+          "name": "FDAR PostgreSQL"
         }
       }
     },
@@ -845,16 +845,16 @@
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
-          "name": "FX Ops PostgreSQL"
+          "name": "FDAR PostgreSQL"
         }
       }
     },
     {
       "parameters": {
-        "fromEmail": "={{ 'FX Ops Alerts <' + $env.ALERT_EMAIL_FROM + '>' }}",
+        "fromEmail": "={{ 'FDAR Alerts <' + $env.ALERT_EMAIL_FROM + '>' }}",
         "toEmail": "={{ $env.ALERT_EMAIL_TO }}",
-        "subject": "={{ '[CRITICAL] FX Operations Alert - Anomaly #' + $json.anomaly_id }}",
-        "html": "={{ `\n<h2>Critical FX Operations Alert</h2>\n\n<p><strong>${$json.message}</strong></p>\n\n<hr>\n\n<p><strong>Alert ID:</strong> ${$json.id}</p>\n<p><strong>Anomaly ID:</strong> ${$json.anomaly_id}</p>\n<p><strong>Channel:</strong> ${$json.channel}</p>\n<p><strong>Status:</strong> ${$json.status}</p>\n<p><strong>Created At:</strong> ${$json.created_at}</p>\n\n<hr>\n\n<p>This alert was generated automatically by the FX Operations Automation & Monitoring platform.</p>\n` }}",
+        "subject": "={{ '[CRITICAL] FDAR FX Market Data Alert - Anomaly #' + $json.anomaly_id }}",
+        "html": "={{ `\n<h2>Critical FDAR FX Market Data Alert</h2>\n\n<p><strong>${$json.message}</strong></p>\n\n<hr>\n\n<p><strong>Alert ID:</strong> ${$json.id}</p>\n<p><strong>Anomaly ID:</strong> ${$json.anomaly_id}</p>\n<p><strong>Channel:</strong> ${$json.channel}</p>\n<p><strong>Status:</strong> ${$json.status}</p>\n<p><strong>Created At:</strong> ${$json.created_at}</p>\n\n<hr>\n\n<p>This alert was generated automatically by the Financial Data Assurance & Reconciliation Platform.</p>\n` }}",
         "options": {}
       },
       "type": "n8n-nodes-base.emailSend",
@@ -869,7 +869,7 @@
       "credentials": {
         "smtp": {
           "id": "iecYmvHYtOVc3Gnl",
-          "name": "FX Ops Gmail SMTP"
+          "name": "FDAR Gmail SMTP"
         }
       },
       "onError": "continueErrorOutput"
@@ -984,7 +984,7 @@
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
-          "name": "FX Ops PostgreSQL"
+          "name": "FDAR PostgreSQL"
         }
       }
     },
@@ -1098,7 +1098,7 @@
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
-          "name": "FX Ops PostgreSQL"
+          "name": "FDAR PostgreSQL"
         }
       }
     }

@@ -1,11 +1,13 @@
+name: financial-data-assurance-reconciliation-platform
+
 services:
   postgres:
     image: postgres:16
-    container_name: fxops-postgres
+    container_name: fdar-postgres
     environment:
-      POSTGRES_USER: fxops
+      POSTGRES_USER: fdar
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: fxops
+      POSTGRES_DB: fdar
     ports:
       - "5432:5432"
     volumes:
@@ -14,14 +16,14 @@ services:
       - ./sql/002_alerting_anomaly_lifecycle.sql:/docker-entrypoint-initdb.d/002_alerting_anomaly_lifecycle.sql:ro
       - ./sql/003_anomaly_lifecycle_audit.sql:/docker-entrypoint-initdb.d/003_anomaly_lifecycle_audit.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fxops -d fxops"]
+      test: ["CMD-SHELL", "pg_isready -U fdar -d fdar"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
-    container_name: fxops-n8n
+    container_name: fdar-n8n
     ports:
       - "5678:5678"
     environment:
@@ -40,5 +42,9 @@ services:
 
 volumes:
   postgres_data:
+    external: true
+    name: fdar-postgres-data
+
   n8n_data:
-  
+    external: true
+    name: fdar-n8n-data

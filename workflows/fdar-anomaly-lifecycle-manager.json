@@ -1,5 +1,5 @@
 {
-  "name": "FX Anomaly Lifecycle Manager",
+  "name": "FDAR Anomaly Lifecycle Manager",
   "nodes": [
     {
       "parameters": {
@@ -35,7 +35,7 @@
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
-          "name": "FX Ops PostgreSQL"
+          "name": "FDAR PostgreSQL"
         }
       },
       "onError": "continueErrorOutput",
@@ -75,7 +75,7 @@
       "credentials": {
         "postgres": {
           "id": "5JJ2CC2NS9rUYWmZ",
-          "name": "FX Ops PostgreSQL"
+          "name": "FDAR PostgreSQL"
         }
       },
       "onError": "continueErrorOutput",
@@ -99,7 +99,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "fx-anomaly-lifecycle",
+        "path": "fdar-anomaly-lifecycle",
         "authentication": "headerAuth",
         "responseMode": "responseNode",
         "options": {}
@@ -116,7 +116,7 @@
       "credentials": {
         "httpHeaderAuth": {
           "id": "oXT02DHxGmZxQv8q",
-          "name": "FX Lifecycle Webhook Header Auth"
+          "name": "FDAR Lifecycle Webhook Header Auth"
         }
       }
     },

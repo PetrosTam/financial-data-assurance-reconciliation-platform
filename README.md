@@ -1,93 +1,248 @@
-# FX Operations Automation & Monitoring
+# Financial Data Assurance & Reconciliation Platform
 
-A reliability-focused **FX market-data quality, monitoring, alerting, reconciliation, observability, and research platform** built incrementally with evidence-driven engineering.
+**Independent financial data assurance and reconciliation platform for reliable multi-source processing, temporal reconciliation, observability, operational evidence and provider intelligence.**
 
-The current verified runtime is based on **n8n, JavaScript, Alpha Vantage REST, PostgreSQL 16, Docker Compose, Git/GitHub, and Gmail SMTP**.
+The current implementation is an **FX market-data assurance profile** built incrementally with evidence-driven engineering. The verified runtime uses **n8n, JavaScript, Alpha Vantage REST, PostgreSQL 16, Docker Compose, Git/GitHub, and Gmail SMTP**.
 
-The broader project evolves this operational foundation toward a provider-neutral market-data assurance platform and an MSc thesis artifact.
+Today the platform provides single-provider FX ingestion, validation, normalization, persistence, workflow lifecycle tracking, operational anomaly detection, critical alerting, anomaly lifecycle management, and durable audit evidence. Multi-provider processing, temporal cross-source reconciliation, advanced observability, and provider intelligence are planned capabilities and are not current runtime claims.
 
-> **This is not a trading bot.**  
-> The project does not execute trades, generate trading signals, manage positions, perform hedging, or calculate trading P&L. FX prices are treated as operational and research data.
+> **Scope boundary:** this is not a trading bot. The platform does not execute or route trades, generate trading signals, manage positions, perform hedging, or calculate trading P&L. Market prices are treated as operational data to be validated, monitored, reconciled, and evidenced.
 
 ---
 
 ## Project Status
 
-The repository distinguishes implementation status explicitly:
+The repository uses explicit implementation states:
 
 - **TESTED** — verified through inspected runtime, database, execution, log, container, delivery, or deterministic test evidence.
 - **IMPLEMENTED** — code/config/schema exists, but verification is incomplete.
 - **IN PROGRESS** — partially implemented.
 - **PLANNED** — accepted target capability, not yet implemented.
 - **PROPOSED** — candidate enhancement requiring design or feasibility confirmation.
-- **OPTIONAL** — future/laboratory capability.
+- **OPTIONAL** — future or laboratory capability.
 - **UNKNOWN** — evidence is insufficient.
 
 ### Current Verified State
 
 | Capability | Status | Evidence / interpretation |
 |---|---|---|
-| Multi-instrument FX ingestion | **TESTED** | EUR/USD, GBP/USD, USD/JPY normalized and persisted in a verified run |
+| Multi-instrument FX ingestion | **TESTED** | EUR/USD, GBP/USD, and USD/JPY normalized and persisted in verified runs |
 | Workflow lifecycle and failure handling | **TESTED** | `started` / `success` / `failed` paths verified |
-| Duplicate-safe quote persistence | **TESTED** | Database uniqueness + conflict-safe persistence |
-| Operational anomaly detection | **TESTED** | Wide spread, stale quote, and extreme movement paths |
+| Duplicate-safe quote persistence | **TESTED** | Database uniqueness plus conflict-safe persistence |
+| Operational anomaly detection | **TESTED** | Wide-spread, stale-quote, and extreme-movement paths |
 | Critical email alerting | **TESTED** | Persisted pending alert → Gmail SMTP → `sent` / `failed` |
-| Alert delivery state persistence | **TESTED** | `pending`, `sent`, `failed`; `sent_at` on success |
-| Environment-based email routing | **TESTED** | Sender/recipient loaded from environment variables |
-| n8n state persistence | **TESTED** | Named-volume mount and restoration verified |
-| Anomaly lifecycle database schema | **TESTED** | `open` / `acknowledged` / `resolved`, lifecycle columns, constraint and index verified |
-| Lifecycle audit trail | **TESTED** | Atomic `anomaly_lifecycle_events` persistence with transition constraints, workflow/execution provenance, and `ON DELETE RESTRICT` FK |
-| Operator lifecycle manager | **TESTED** | Authenticated n8n Webhook path validates requests, enforces legal transitions, updates lifecycle timestamps/reason, blocks stale writes, and returns controlled HTTP responses |
+| Alert delivery-state persistence | **TESTED** | `pending`, `sent`, `failed`; `sent_at` on success |
+| Environment-based email routing | **TESTED** | Sender and recipient loaded from environment variables |
+| n8n state persistence | **TESTED** | Persistent volume mount and state restoration verified |
+| Anomaly lifecycle database schema | **TESTED** | `open` / `acknowledged` / `resolved`, lifecycle columns, constraints, and indexes verified |
+| Lifecycle audit trail | **TESTED** | Atomic `anomaly_lifecycle_events` persistence with constrained transitions and workflow/execution provenance |
+| Operator lifecycle manager | **TESTED** | Authenticated webhook validates requests, enforces legal transitions, blocks stale writes, and returns controlled HTTP responses |
 | Fresh PostgreSQL bootstrap | **TESTED** | Isolated PostgreSQL 16 bootstrap verified ordered `001 → 002 → 003` execution and resulting schema |
+| Configuration-driven rules and reference data | **PLANNED — NEXT** | Required before provider abstraction and multi-source processing |
 | Provider abstraction | **PLANNED** | Canonical output exists, but only Alpha Vantage integration is implemented |
-| Second source | **PLANNED** | Not yet integrated |
-| Temporal cross-source reconciliation | **PLANNED** | Do not call current ingestion “reconciliation” |
-| Python research layer | **PLANNED** | Defined by the MSc proposal, not current runtime |
-| Prometheus / Grafana | **PLANNED** | Not integrated in current runtime |
+| Second independent source | **PLANNED** | Not yet integrated |
+| Temporal cross-source reconciliation | **PLANNED** | Current single-provider ingestion must not be described as reconciliation |
+| Prometheus / Grafana | **PLANNED** | Not integrated in the current runtime |
 | Platform API / BFF | **PLANNED** | Target browser/server boundary |
-| React/TypeScript operator console | **PLANNED** | No current operator web product |
-| Expanded platform stack | **PLANNED / PROPOSED / OPTIONAL** | Target architecture only; no implementation claim |
+| React / TypeScript operator console | **PLANNED** | No current browser product |
+| Provider intelligence and scorecards | **PLANNED** | Depends on multi-provider evidence and temporal comparison |
 
-> `records_processed=3` in the verified three-pair run means **three normalized output records**, not necessarily three newly inserted rows when duplicate conflict handling is active.
+> `records_processed=3` means **three normalized output records** for the current three-pair workflow. It does not guarantee three new database inserts when duplicate conflict handling is active.
 
 ---
 
-## Current System Purpose
+## Current Runtime Identity
 
-The current system provides a small but verified operational foundation for:
+The current Docker Compose runtime uses:
 
-- FX market-data ingestion
-- provider-response validation
-- provider-specific normalization into a common internal shape
-- PostgreSQL persistence
-- duplicate protection
-- execution lifecycle tracking
-- controlled failure handling
-- operational anomaly detection
-- persisted anomaly evidence
-- critical alert generation
-- real email delivery
-- delivery-state persistence
-- lifecycle-managed anomalies with authenticated operator actions
-- durable lifecycle transition audit evidence
-- reproducible local database bootstrap
-- secure configuration and checkpoint discipline
+```text
+Compose project: financial-data-assurance-reconciliation-platform
+PostgreSQL container: fdar-postgres
+n8n container: fdar-n8n
+PostgreSQL database: fdar
+PostgreSQL role: fdar
+PostgreSQL volume: fdar-postgres-data
+n8n volume: fdar-n8n-data
+```
 
-The project prioritizes:
+The service-level PostgreSQL hostname used by n8n remains:
 
-1. correctness
-2. explicit evidence
-3. reproducibility
-4. failure transparency
-5. idempotency
-6. provenance
-7. simple verified components before additional complexity
+```text
+postgres
+```
+
+because containers communicate through the Docker Compose service network rather than the host-facing container name.
+
+---
+
+## Core Engineering Principles
+
+The platform prioritizes:
+
+1. correctness before scale
+2. evidence before status claims
+3. deterministic validation at boundaries
+4. provider-neutral internal contracts
+5. explicit provenance
+6. idempotent persistence
+7. failure transparency
+8. reproducible bootstrap and verification
+9. least privilege and secret isolation
+10. simple verified components before additional infrastructure
+
+Technology is added only when it has a distinct responsibility, a simpler alternative has been considered, and success can be measured.
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Git
+- Docker Desktop with Docker Compose
+- an Alpha Vantage API credential
+- SMTP credentials if email alerting will be exercised
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/PetrosTam/financial-data-assurance-reconciliation-platform.git
+cd financial-data-assurance-reconciliation-platform
+```
+
+### 2. Create local environment configuration
+
+Create `.env` from `.env.example` and provide local values for the required environment variables.
+
+Example shape:
+
+```dotenv
+POSTGRES_PASSWORD=<strong-local-password>
+ALERT_EMAIL_FROM=<sender-address>
+ALERT_EMAIL_TO=<recipient-address>
+```
+
+Do not commit `.env` or real credentials.
+
+### 3. Create the persistent Docker volumes
+
+The current Compose configuration uses explicit external volumes:
+
+```bash
+docker volume create fdar-postgres-data
+docker volume create fdar-n8n-data
+```
+
+### 4. Validate the resolved Compose configuration
+
+```bash
+docker compose config --no-interpolate
+```
+
+### 5. Start the platform
+
+```bash
+docker compose up -d
+```
+
+### 6. Inspect runtime state
+
+```bash
+docker ps --filter "name=fdar"
+docker inspect fdar-postgres --format '{{.State.Health.Status}}'
+```
+
+Expected PostgreSQL health state:
+
+```text
+healthy
+```
+
+### 7. Inspect the database
+
+```bash
+docker exec fdar-postgres psql -U fdar -d fdar -c "\dt"
+```
+
+The current schema should contain:
+
+```text
+alerts
+anomalies
+anomaly_lifecycle_events
+fx_quotes
+workflow_runs
+```
+
+### 8. Open n8n
+
+```text
+http://localhost:5678
+```
+
+Configure the required n8n credentials locally. Secret values must remain outside Git.
+
+---
+
+## n8n Credentials
+
+The current workflows depend on local n8n credentials with these logical names:
+
+```text
+Alpha Vantage API
+FDAR PostgreSQL
+FDAR Gmail SMTP
+FDAR Lifecycle Webhook Header Auth
+```
+
+### PostgreSQL Credential
+
+Expected connection shape:
+
+```text
+Host: postgres
+Database: fdar
+User: fdar
+Password: <local POSTGRES_PASSWORD>
+```
+
+### Lifecycle Header Authentication
+
+The lifecycle webhook uses a Header Auth credential with header name:
+
+```text
+X-FDAR-Lifecycle-Token
+```
+
+The token value is secret and must not be committed, logged intentionally, pasted into documentation, or exposed in screenshots.
+
+---
+
+## Current Workflows
+
+The repository contains three n8n workflow exports:
+
+```text
+FDAR FX Market Data Pipeline - Alpha Vantage
+FDAR Workflow Error Handler
+FDAR Anomaly Lifecycle Manager
+```
+
+Current export files:
+
+```text
+workflows/fdar-fx-market-data-pipeline-alpha-vantage.json
+workflows/fdar-workflow-error-handler.json
+workflows/fdar-anomaly-lifecycle-manager.json
+```
+
+Workflow exports are configuration artifacts. Runtime execution evidence remains necessary before a capability is marked **TESTED**.
 
 ---
 
 ## Current Architecture
 
-### Main Operational Flow
+### Main Market-Data Flow
 
 ```text
 Manual Trigger / Schedule Trigger
@@ -149,13 +304,47 @@ Production Workflow Failure
        workflow_runs
 ```
 
-The workflow export and runtime remain the authoritative source for exact node wiring.
+### Anomaly Lifecycle Flow
+
+```text
+Authenticated Webhook
+        |
+        v
+Extract Webhook Request
+        |
+        v
+Validate Lifecycle Request
+        |
+        v
+Read Current Anomaly
+        |
+        v
+Validate Legal Transition
+        |
+        v
+Apply Lifecycle Transition
+        |
+        v
+Verify Transition Applied
+        |
+        v
+Respond to Webhook
+```
+
+Node failures are routed through:
+
+```text
+Build Webhook Error Response
+        |
+        v
+Respond Lifecycle Error
+```
 
 ---
 
 ## Multi-Instrument FX Ingestion
 
-The current workflow processes:
+The current market-data workflow processes:
 
 ```text
 EUR/USD
@@ -163,14 +352,14 @@ GBP/USD
 USD/JPY
 ```
 
-Pairs are generated dynamically by the `Generate FX Pairs` node using:
+Pairs are generated dynamically using:
 
 ```text
 from_currency
 to_currency
 ```
 
-The same provider integration is therefore reused for all three pairs.
+The same provider integration is reused for all three instruments.
 
 ### Sequential Provider Requests
 
@@ -194,13 +383,13 @@ Next item
 Batch Size = 1
 ```
 
-This is a deliberate current-provider pacing mechanism, not a general retry/resilience framework.
+This is a current-provider pacing mechanism. It is not a general retry, backoff, rate-limit, or resilience framework.
 
 ### Schedule
 
-The committed production workflow is scheduled every four hours at minute 5.
+The committed market-data workflow is scheduled every four hours at minute 5.
 
-Manual execution is also available for controlled development and verification.
+Manual execution is also available for controlled verification.
 
 ---
 
@@ -212,14 +401,14 @@ The implemented provider is **Alpha Vantage** using:
 CURRENCY_EXCHANGE_RATE
 ```
 
-with dynamic request parameters:
+Dynamic request parameters are derived from the current pair:
 
 ```text
 from_currency = {{ $json.from_currency }}
 to_currency   = {{ $json.to_currency }}
 ```
 
-API authentication is stored in n8n credentials rather than embedded in workflow logic.
+API authentication is stored in an n8n credential rather than embedded in workflow logic.
 
 External provider responses are treated as **untrusted input**.
 
@@ -242,7 +431,7 @@ The current normalization path checks:
 - positive ask
 - `ask >= bid`
 - presence of timestamp data
-- parseable timestamp semantics used by the current adapter
+- timestamp parseability under the current adapter semantics
 
 Invalid responses are rejected before quote persistence.
 
@@ -273,29 +462,30 @@ USDJPY
 ### Derived Values
 
 ```text
-mid_price = (bid + ask) / 2
-spread    = ask - bid
+mid_price  = (bid + ask) / 2
+spread     = ask - bid
 spread_bps = (spread / mid_price) * 10000
 ```
 
-### Important Current Limitation
+### Current Canonical-Model Gaps
 
-The current Alpha Vantage normalizer produces a canonical output shape, but that does **not** yet equal a full provider-abstraction layer.
+The current normalizer provides a common output shape, but this is not yet a complete provider-abstraction layer.
 
 Known gaps include:
 
-- `provider_instrument_id` is currently `NULL` because no provider identifier semantics have yet been implemented for the current adapter.
-- raw provider timestamp text is not yet retained separately as `source_timestamp_raw`.
-- timezone and timestamp-precision provenance are not yet fully explicit.
-- historical/live arrival-time semantics must not be fabricated when unavailable.
+- `provider_instrument_id` is not yet populated with verified provider-specific identifier semantics
+- raw provider timestamp text is not yet retained separately as `source_timestamp_raw`
+- timezone and timestamp-precision provenance are not yet fully explicit
+- arrival-time semantics must not be fabricated when unavailable
+- configuration/version provenance is not yet attached to every derived monitoring decision
 
-These are planned hardening items before multi-provider research and reconciliation.
+These items must be hardened before multi-provider processing.
 
 ---
 
 ## PostgreSQL Data Model
 
-The current database contains five core operational tables.
+The current database contains five operational tables.
 
 ### `fx_quotes`
 
@@ -340,7 +530,7 @@ finished_at
 
 ### `anomalies`
 
-Stores operational/data-quality findings and lifecycle fields.
+Stores operational/data-quality findings and lifecycle state.
 
 Representative fields:
 
@@ -375,7 +565,7 @@ created_at
 
 ### `anomaly_lifecycle_events`
 
-Stores durable evidence for successful anomaly lifecycle transitions.
+Stores durable evidence for successful lifecycle transitions.
 
 Representative fields:
 
@@ -390,14 +580,7 @@ execution_id
 created_at
 ```
 
-The table enforces the currently supported transition model:
-
-```text
-open → acknowledged
-acknowledged → resolved
-```
-
-It also uses a foreign key to `anomalies(id)` with `ON DELETE RESTRICT` and an index on `(anomaly_id, created_at DESC)`.
+The table constrains the supported transition model and uses a foreign key to `anomalies(id)` with `ON DELETE RESTRICT`.
 
 ---
 
@@ -405,15 +588,17 @@ It also uses a foreign key to `anomalies(id)` with `ON DELETE RESTRICT` and an i
 
 Quote persistence uses database-backed duplicate protection.
 
-The current uniqueness model is:
+Current uniqueness:
 
 ```sql
 UNIQUE (symbol, observed_at, source)
 ```
 
-The persistence path uses conflict handling so replaying the same logical quote does not cause an insertion failure.
+The persistence path uses conflict handling so replaying the same logical quote does not fail because of a duplicate insert.
 
 This provides idempotency for the current logical uniqueness definition.
+
+It does **not** yet solve every future multi-provider identity or replay problem; those semantics must be defined explicitly as the platform expands.
 
 ---
 
@@ -442,7 +627,7 @@ records_processed = <normalized output count>
 finished_at = <completion timestamp>
 ```
 
-For the verified three-pair run:
+For the current three-pair workflow, a verified successful run produced:
 
 ```text
 records_processed = 3
@@ -450,10 +635,10 @@ records_processed = 3
 
 ### Failure Handling
 
-A dedicated workflow:
+The dedicated workflow:
 
 ```text
-FX Workflow Error Handler
+FDAR Workflow Error Handler
 ```
 
 uses:
@@ -472,7 +657,7 @@ error_message = <actual failure message>
 finished_at = <failure timestamp>
 ```
 
-Controlled failures were used to verify this path.
+Controlled failures were used to verify the failure path.
 
 ---
 
@@ -486,7 +671,7 @@ stale_quote
 extreme_price_movement
 ```
 
-The current thresholds are **operational assumptions only**. They are not universal market rules and are not the thesis-calibrated statistical baselines.
+The current thresholds are **operational assumptions only**. They are not universal market rules.
 
 ### Wide Spread
 
@@ -510,7 +695,7 @@ Warning:  > 600 seconds
 Critical: > 1800 seconds
 ```
 
-Freshness is treated as a deterministic operational policy.
+Freshness is currently treated as a deterministic operational policy.
 
 ### Extreme Price Movement
 
@@ -533,11 +718,11 @@ Critical: > 50 bps
 
 The previous quote is retrieved with parameterized SQL.
 
-### Critical Multi-Provider Safety Gap
+### Multi-Provider Safety Requirement
 
-The current previous-quote lookup is based on symbol/time semantics and is not yet explicitly provider/source-safe.
+The current previous-quote lookup is not yet explicitly provider/source-safe.
 
-Before introducing a second live provider, the lookup must be made source/provider-scoped or moved into explicitly defined cross-source reconciliation logic.
+Before introducing a second live provider, previous-quote semantics must become source/provider-scoped or be replaced by explicitly defined temporal cross-source comparison logic.
 
 Accidental cross-provider baselining must not be allowed.
 
@@ -545,9 +730,7 @@ Accidental cross-provider baselining must not be allowed.
 
 ## Anomaly Persistence
 
-Detected findings use a common structure.
-
-Current severity values:
+Current severity values are:
 
 ```text
 info
@@ -555,20 +738,22 @@ warning
 critical
 ```
 
-`details` is stored in PostgreSQL `JSONB` for type-specific evidence.
+Type-specific evidence is stored in PostgreSQL `JSONB` through the `details` field.
 
-If no anomaly is detected, the monitoring branch emits no anomaly record and normal quote processing continues.
+If no anomaly is detected, the monitoring branch emits no anomaly row and normal quote processing continues.
 
-### Current Threshold-Provenance Debt
+### Threshold-Provenance Debt
 
-The current `threshold_value` field stores the base operational detection threshold, while critical severity may be determined by a second hardcoded boundary.
+The current `threshold_value` field stores the base operational threshold, while critical severity may be determined by a second hardcoded boundary.
 
-Future configuration-driven rules should preserve:
+Configuration-driven rules should preserve:
 
-- severity-specific threshold
 - rule identifier
-- configuration version
-- effective configuration provenance
+- rule version
+- severity-specific threshold
+- effective configuration version
+- configuration provenance
+- evaluation timestamp
 
 ---
 
@@ -589,7 +774,7 @@ Send Critical Alert Email
    └─ error   → Mark Alert Failed
 ```
 
-### Current Delivery States
+### Delivery States
 
 ```text
 pending
@@ -612,29 +797,29 @@ status = failed
 
 ### Verified Delivery Evidence
 
-The current Gmail SMTP path has been verified using:
+The Gmail SMTP path has been verified using:
 
 - deterministic test input
 - configured n8n SMTP credential
 - environment-based sender/recipient
 - successful SMTP acceptance
-- real Gmail inbox delivery
+- real inbox delivery
 - persisted success state
 - persisted failure path
 - cleanup of temporary test artifacts
 
 Email/Gmail SMTP is the only currently implemented alert channel.
 
-Slack, Teams, Jira, ServiceNow, and PagerDuty remain future adapters.
+Other notification or incident-management channels remain future adapters.
 
 ---
 
-## Email Configuration and Secret Handling
+## Email Configuration
 
 SMTP authentication remains in the n8n credential:
 
 ```text
-FX Ops Gmail SMTP
+FDAR Gmail SMTP
 ```
 
 The workflow reads:
@@ -644,28 +829,9 @@ $env.ALERT_EMAIL_FROM
 $env.ALERT_EMAIL_TO
 ```
 
-Real local values are stored in:
+Real local values belong in `.env`, which must remain excluded from Git.
 
-```text
-.env
-```
-
-and are excluded from Git.
-
-A safe template is committed as:
-
-```text
-.env.example
-```
-
-Example:
-
-```text
-ALERT_EMAIL_FROM=alerts@example.com
-ALERT_EMAIL_TO=operator@example.com
-```
-
-No real personal alert address should be committed in workflow exports.
+A safe committed template may contain placeholders only.
 
 ---
 
@@ -677,7 +843,7 @@ Migration:
 sql/002_alerting_anomaly_lifecycle.sql
 ```
 
-provides the lifecycle fields:
+provides:
 
 ```text
 status
@@ -686,7 +852,7 @@ resolved_at
 resolution_reason
 ```
 
-Current allowed states:
+Current states:
 
 ```text
 open
@@ -708,74 +874,83 @@ anomaly_lifecycle_events
 
 with constrained `acknowledge` / `resolve` actions, legal `from_status → to_status` combinations, workflow/execution provenance, and an `ON DELETE RESTRICT` relationship to the parent anomaly.
 
-### FX Anomaly Lifecycle Manager
+### FDAR Anomaly Lifecycle Manager
 
 The operator lifecycle workflow is **TESTED**.
 
-Current operational entry path:
+Current command shape:
 
-```text
-Webhook
-  ↓
-Extract Webhook Request
-  ↓
-Validate Lifecycle Request
-  ↓
-Read Current Anomaly
-  ↓
-Validate Legal Transition
-  ↓
-Apply Lifecycle Transition
-  ↓
-Verify Transition Applied
-  ↓
-Respond to Webhook
+```json
+{
+  "anomaly_id": 123,
+  "action": "acknowledge"
+}
 ```
 
-Node error outputs route through:
+Resolution requires a reason:
 
-```text
-Build Webhook Error Response
-  ↓
-Respond Lifecycle Error
+```json
+{
+  "anomaly_id": 123,
+  "action": "resolve",
+  "resolution_reason": "Verified and closed by operator"
+}
 ```
 
-The current operator endpoint uses n8n Header Auth and accepts lifecycle commands containing:
-
-```text
-anomaly_id
-action
-resolution_reason
-```
-
-The workflow validates request shape before database access, allows only:
+Supported transitions:
 
 ```text
 open → acknowledged
 acknowledged → resolved
 ```
 
-and uses the previously read state as an optimistic-concurrency precondition on the update. A stale-state test verified that the mutation was rejected and no false lifecycle audit event was created.
+The workflow uses the previously read state as an optimistic-concurrency precondition on the update, preventing a stale request from silently overwriting a newer state.
 
-Verified HTTP behavior includes:
+Successful state mutation and audit insertion occur atomically so a successful lifecycle update and its corresponding audit event remain coupled.
+
+### Lifecycle Endpoint
+
+Current webhook path:
+
+```text
+fdar-anomaly-lifecycle
+```
+
+Header authentication:
+
+```text
+X-FDAR-Lifecycle-Token: <secret-token>
+```
+
+In n8n test mode, the endpoint is available only while **Listen for test event** is active:
+
+```text
+http://localhost:5678/webhook-test/fdar-anomaly-lifecycle
+```
+
+When the workflow is active for production execution, n8n uses the production webhook route:
+
+```text
+http://localhost:5678/webhook/fdar-anomaly-lifecycle
+```
+
+### Verified HTTP Contract
 
 ```text
 403  authentication denial
-400  invalid action / missing required resolution reason
+400  invalid action or missing required resolution reason
 404  anomaly not found
 409  illegal lifecycle transition
-200  successful acknowledge / resolve
+200  successful acknowledge or resolve
 ```
 
-Successful state mutation and audit insertion occur in one SQL statement so a successful lifecycle update and its corresponding audit event remain coupled.
-
-Future case-management states such as `investigating`, `mitigated`, or `reopened` require a separate migration/API/UI change and are not current states.
+Future lifecycle states require an explicit schema/API/workflow change and must not be introduced implicitly.
 
 ---
 
 ## Fresh PostgreSQL Bootstrap
 
-A fresh PostgreSQL volume automatically applies:
+A fresh PostgreSQL data directory applies the migration chain in order:
 
 ```text
 001_schema.sql
@@ -785,119 +960,112 @@ A fresh PostgreSQL volume automatically applies:
 003_anomaly_lifecycle_audit.sql
 ```
 
-Docker Compose mounts all three under:
+Docker Compose mounts the three SQL files under:
 
 ```text
 /docker-entrypoint-initdb.d/
 ```
 
-An isolated PostgreSQL 16 bootstrap test verified:
+An isolated PostgreSQL 16 bootstrap verification confirmed:
 
 - ordered `001 → 002 → 003` execution
-- lifecycle columns exist
+- all five core tables exist
+- table ownership is `fdar`
 - `status` defaults to `open`
 - `anomalies_status_check` allows `open`, `acknowledged`, `resolved`
-- `idx_anomalies_status_detected_at` exists
-- `anomaly_lifecycle_events` exists
-- lifecycle-event primary key, transition checks, `ON DELETE RESTRICT` FK, and `(anomaly_id, created_at DESC)` index exist
-- initialization completed without relevant `ERROR` / `FATAL`
-- the temporary bootstrap container was removed afterward
+- lifecycle columns exist
+- lifecycle-event primary key exists
+- transition checks exist
+- `ON DELETE RESTRICT` foreign key exists
+- anomaly lifecycle indexes exist
+- initialization completed without relevant `ERROR`, `FATAL`, or `PANIC`
+- temporary verification resources were removed afterward
+
+Do not destroy the persistent runtime volume merely to re-test bootstrap behavior. Use isolated temporary resources for destructive bootstrap verification.
 
 ---
 
 ## n8n Persistence
 
-n8n state is persisted through:
+n8n state is persisted at:
 
-```yaml
-volumes:
-  - n8n_data:/home/node/.n8n
+```text
+/home/node/.n8n
 ```
 
-Persistence verification included:
+through the external volume:
 
-- resolved Docker Compose inspection
-- actual container mount inspection
-- workflow export checks
-- container recreation
-- successful restoration of the existing n8n account/workflow state
+```text
+fdar-n8n-data
+```
 
-A named volume declaration alone is not considered sufficient evidence; the service mount must be verified.
+Persistence verification includes both the declared Compose configuration and the actual container mount.
+
+A volume declaration alone is not sufficient evidence; the running service must mount it at the expected application path.
 
 ---
 
 ## Security and Repository Hygiene
 
-Current engineering rules include:
+Current engineering rules:
 
-- API keys stay outside Git
+- provider API keys stay outside Git
 - SMTP passwords stay outside Git
-- database secrets stay outside Git
-- `.env` and `.env.*` remain ignored except safe `.env.example`
-- n8n credentials hold provider/SMTP authentication and the lifecycle Webhook Header Auth secret
-- lifecycle requests are authenticated before the domain path executes
+- database passwords stay outside Git
+- lifecycle authentication tokens stay outside Git
+- `.env` and local secret-bearing environment files remain ignored
+- n8n credentials hold provider, SMTP, PostgreSQL, and lifecycle authentication secrets
+- privileged lifecycle requests are authenticated before mutation logic executes
 - dynamic SQL uses parameterization where applicable
-- workflow exports are inspected for:
-  - personal emails
-  - API keys
-  - passwords
-  - bearer/auth tokens
-  - authorization headers
-  - `client_secret`
-  - pinned test data
-- raw licensed research data must remain local unless redistribution rights explicitly allow otherwise
-- public checkpoints exclude:
-  - `.env`
-  - `.git`
-  - runtime volumes
-  - backups
-  - logs
-  - licensed raw datasets
-  - secrets
+- workflow exports are inspected for secret leakage
+- committed exports must not contain real personal email addresses
+- committed exports must not contain API keys, passwords, tokens, authorization headers, `client_secret`, or pinned secret-bearing test data
+- raw provider data must be handled according to its applicable data-use terms
+- runtime volumes, backups, local logs, and secret files must not be committed
 
-Project checkpoints are created from committed state using `git archive`, not by manually zipping a working directory.
+Raw webhook execution data can contain request headers. Execution retention and access must therefore be treated as part of the security boundary.
 
 ---
 
 ## Current Tech Stack
 
-### Implemented / Current
+### Implemented
 
-- n8n
-- JavaScript
-- Alpha Vantage REST API
-- PostgreSQL 16
-- Docker Compose
-- Git / GitHub
-- Gmail SMTP
+| Domain | Technology | Responsibility | Status |
+|---|---|---|---|
+| Workflow orchestration | n8n | ingestion, validation orchestration, monitoring, alerting, lifecycle workflows | **TESTED** |
+| Workflow logic | JavaScript | validation, normalization, rule evaluation, request shaping | **TESTED** |
+| Market-data provider | Alpha Vantage REST | current FX quote source | **TESTED** |
+| Operational database | PostgreSQL 16 | quotes, runs, anomalies, alerts, lifecycle audit | **TESTED** |
+| Local runtime | Docker Compose | reproducible local service orchestration | **TESTED** |
+| Source control | Git / GitHub | versioned code/configuration and reviewable change history | **CURRENT** |
+| Notification channel | Gmail SMTP | current critical-alert delivery | **TESTED** |
 
-### Planned / Proposed / Optional Target Landscape
+### Planned Technology Landscape
 
-The broader platform may introduce components only when each has a distinct responsibility, a simpler alternative has been considered, and success criteria can be verified.
+Future technology adoption is responsibility-driven rather than checklist-driven.
 
-| Domain | Target technologies / tools | Current status |
-|---|---|---|
-| Orchestration | n8n, Temporal.io, Apache Airflow | n8n current; others planned |
-| Languages | Python, Go, Java, JavaScript, TypeScript, C++, optional Kotlin/Swift | JS current; others planned/optional |
-| APIs/contracts | REST, WebSocket, SSE, gRPC, GraphQL, OpenAPI, Protobuf, AsyncAPI, Pact | outbound REST current; owned contracts planned |
-| Streaming | Kafka, Schema Registry, Kafka Connect, Debezium, Flink, Strimzi, Flink Operator, MirrorMaker 2 | planned |
-| Data stores | PostgreSQL, ClickHouse, Redis, MongoDB | PostgreSQL current; others planned |
-| Lakehouse/analytics | MinIO, Parquet, Iceberg, Spark, Trino, dbt, OpenMetadata | planned |
-| Observability | OpenTelemetry, Jaeger, Prometheus, Grafana, Alertmanager, Loki, Sentry, Pyroscope | planned |
-| Security | OIDC/OAuth2/JWT, RBAC, OpenFGA, Vault, mTLS, OPA/Gatekeeper | planned |
-| Frontend | React, TypeScript, Redux Toolkit, TanStack, Vite, Storybook | planned |
-| Delivery/platform | Terraform, Kubernetes, Helm, GitOps/Argo CD, Argo Rollouts, KEDA | planned |
-| Testing/resilience | Testcontainers, Pact, Playwright, k6, Toxiproxy, Chaos Mesh, Hypothesis, Schemathesis, mutation testing, OWASP ZAP | planned |
-| Research reproducibility | MLflow, manifests/hashes/Git SHA, dataset/version tracking | planned |
-| Optional AIOps | governed LLM/RAG assistant and optional inference lab | optional / final maturity |
+| Domain | Candidate technologies | Purpose | Status |
+|---|---|---|---|
+| Service/backend layer | Python, Go, Java, TypeScript | provider adapters, APIs, evaluation services, platform services | **PLANNED / PROPOSED** |
+| APIs/contracts | REST, WebSocket, SSE, gRPC, OpenAPI, Protobuf, AsyncAPI, Pact | typed integration boundaries and contract testing | **PLANNED** |
+| Streaming | Kafka, Schema Registry, Kafka Connect, Debezium, Flink | durable event backbone and event-time processing when justified | **PLANNED** |
+| Data stores | PostgreSQL, ClickHouse, Redis, MongoDB | operational, analytical, cache/state, and document responsibilities | **PLANNED / PROPOSED** |
+| Analytical storage | MinIO, Parquet, Iceberg, Spark, Trino, dbt | replay, historical analysis, quality analytics, reproducibility | **PLANNED** |
+| Observability | OpenTelemetry, Prometheus, Grafana, Alertmanager, Loki, Jaeger, Sentry, Pyroscope | metrics, logs, traces, errors, profiling | **PLANNED** |
+| Frontend | React, TypeScript, Redux Toolkit, TanStack, Vite, Storybook | operator and provider-intelligence console | **PLANNED** |
+| Platform delivery | Terraform, Kubernetes, Helm, Argo CD, KEDA | infrastructure, deployment, scaling, and GitOps | **PLANNED** |
+| Security | OIDC/OAuth2, RBAC, OpenFGA, Vault, mTLS, OPA | authentication, authorization, secret management, policy | **PLANNED** |
+| Verification | Testcontainers, Playwright, k6, Toxiproxy, Chaos Mesh, API fuzz/property testing, mutation testing | integration, E2E, performance, failure, and recovery testing | **PLANNED** |
+| Reproducibility | manifests, hashes, Git SHA, dataset/version tracking, MLflow where justified | repeatable evaluation and evidence traceability | **PLANNED** |
 
-Presence in this table is **not an implementation claim**.
+Presence in this table is not an implementation claim.
 
 ---
 
 ## Planned Platform Boundary
 
-The target browser boundary is:
+The future browser boundary is intentionally server-side:
 
 ```text
 React / TypeScript Console
@@ -906,27 +1074,46 @@ React / TypeScript Console
 Platform API / BFF
           |
           +--> domain services
-          +--> PostgreSQL / analytical stores via server-side clients
-          +--> Kafka / Flink / n8n / Kubernetes / Argo / Prometheus adapters
-          +--> authorization and audit boundary
+          +--> PostgreSQL / analytical stores
+          +--> workflow / streaming / observability adapters
+          +--> authentication / authorization
+          +--> audit boundary
 ```
 
-The browser must never receive:
+The browser must never receive unrestricted:
 
 - database credentials
 - provider secrets
-- Kafka credentials
-- Kubernetes credentials
+- streaming-platform credentials
+- infrastructure credentials
 - Vault credentials
-- unrestricted infrastructure tokens
+- privileged backend tokens
 
-The product boundary is server-side and typed. Internally, each subsystem should use the appropriate protocol, SDK, driver, or API rather than forcing REST everywhere.
+Privileged writes require authentication, authorization, validation, and audit evidence.
+
+---
+
+## Provider Intelligence Direction
+
+Provider intelligence is a planned product capability that becomes meaningful only after independent provider evidence exists.
+
+Planned capabilities include:
+
+- provider health and availability metrics
+- data-quality scorecards
+- temporal coverage metrics
+- divergence and unmatched-event metrics
+- latency/age evidence where semantics are actually available
+- provider certification checks
+- provider migration assurance
+- configuration replay/change assurance
+- lineage and blast-radius evidence
+
+Provider disagreement is evidence to investigate; it is not automatically proof that either provider is wrong.
 
 ---
 
 ## Project Structure
-
-Current Part-02 repository structure:
 
 ```text
 .
@@ -937,89 +1124,85 @@ Current Part-02 repository structure:
 │   ├── 002_alerting_anomaly_lifecycle.sql
 │   └── 003_anomaly_lifecycle_audit.sql
 ├── workflows/
-│   ├── fx-anomaly-lifecycle-manager.json
-│   ├── fx-workflow-error-handler.json
-│   └── multi-instrument-fx-operations-pipeline-alpha-vantage.json
+│   ├── fdar-anomaly-lifecycle-manager.json
+│   ├── fdar-fx-market-data-pipeline-alpha-vantage.json
+│   └── fdar-workflow-error-handler.json
 ├── .env.example
 ├── .gitignore
 ├── docker-compose.yml
 └── README.md
 ```
 
-Future modules will be introduced incrementally rather than pre-created without need.
+New modules should be introduced only when their responsibility is concrete and the dependency order justifies them.
 
 ---
 
 ## Testing and Verification Evidence
 
-Verified evidence includes:
+Current verified evidence includes:
 
-- three-pair ingestion
-- three normalized outputs in a verified current run
-- PostgreSQL persistence inspection
+- three-pair FX ingestion
+- normalized output generation
+- PostgreSQL quote persistence
 - duplicate-safe reprocessing
-- `started` / `success` execution lifecycle
-- controlled production failure
-- original failed run updated by error workflow
-- provider/malformed response validation
+- `started` / `success` workflow lifecycle
+- controlled production failure handling
+- provider-response validation
 - wide-spread detection
 - stale-quote detection
 - extreme price-movement detection
 - critical anomaly routing
 - persisted pending alert
-- successful Gmail SMTP acceptance
-- real Gmail inbox delivery
-- `sent` + `sent_at`
-- alert failure path
-- environment-based email routing
-- no hardcoded personal email in committed workflow export
-- empty n8n `pinData` in committed workflow export
+- successful Gmail SMTP delivery
+- persisted alert success state
+- alert failure state
+- environment-based alert routing
 - n8n persistent-volume restoration
-- anomaly lifecycle columns/constraint/index
-- authenticated lifecycle Webhook denial (`403`)
-- malformed/invalid lifecycle requests (`400`)
-- missing anomaly handling (`404`)
-- illegal lifecycle transition handling (`409`)
-- successful authenticated `open → acknowledged → resolved` lifecycle (`200`)
-- persisted acknowledgement/resolution timestamps and resolution reason
+- lifecycle schema verification
+- lifecycle authentication denial
+- invalid lifecycle request handling
+- missing-anomaly handling
+- illegal-transition handling
+- successful lifecycle transitions
+- persisted acknowledgement and resolution metadata
 - optimistic-concurrency stale-write rejection
-- atomic lifecycle audit events with workflow/execution provenance
+- atomic lifecycle audit persistence
 - isolated fresh PostgreSQL bootstrap
-- ordered `001 → 002 → 003` migration execution
-- temporary test cleanup
-- checkpoint hygiene inspection
+- migration-order verification
+- runtime container/database identity verification
+- workflow export JSON validation
+- secret-pattern inspection
+- temporary verification-resource cleanup
 
-A capability is **TESTED only after its result is inspected**.
+A capability remains below **TESTED** until the relevant result has been inspected.
 
 ---
 
 ## Known Technical Debt
 
-The current Part-02 implementation intentionally retains several known gaps that must be resolved before later milestones.
+### 1. Source-Safe Previous Quote
 
-### Source-Safe Previous Quote
+The current extreme-movement previous-quote lookup is not yet provider/source-scoped.
 
-The current extreme-movement previous-quote query is not yet provider/source-scoped.
+This must be resolved before second-provider operation.
 
-**Required before second-provider operation.**
+### 2. Timestamp / Timezone / Precision Provenance
 
-### Timestamp / Timezone / Precision Provenance
+The current adapter does not yet preserve full raw timestamp, timezone, and precision semantics as explicit provenance.
 
-The current adapter does not yet preserve the full raw timestamp and explicit timezone/precision semantics required by the planned canonical research representation.
+### 3. Provider Instrument Semantics
 
-### Provider Instrument Semantics
+`provider_instrument_id` exists but is not yet populated with verified provider-specific identifier semantics.
 
-`provider_instrument_id` exists in the schema but is not yet populated with verified Alpha Vantage-specific identifier semantics.
+### 4. Threshold / Configuration Provenance
 
-### Threshold / Configuration Provenance
+Operational thresholds are currently hardcoded. Future rules must be versioned and preserve the exact effective configuration used for each decision.
 
-Current thresholds are hardcoded operational assumptions. Future rules must be versioned and retain severity-specific threshold/config provenance.
-
-### Normalized vs Inserted Counts
+### 5. Normalized vs Inserted Counts
 
 `records_processed` currently represents normalized output count.
 
-Future observability may separate:
+Future observability should separate metrics such as:
 
 ```text
 records_normalized
@@ -1028,208 +1211,151 @@ records_duplicate
 records_rejected
 ```
 
-### Lifecycle Endpoint Security Boundary
+### 6. Lifecycle Security Boundary
 
-The current lifecycle manager uses n8n Header Auth as a local/operator control boundary. This is sufficient for the current verified milestone, but it is not the final product security architecture.
+Header Auth is acceptable for the current local/operator workflow boundary, but browser-facing privileged actions should move behind a dedicated API/BFF with explicit authorization and audit controls.
 
-Before browser-facing productisation, privileged lifecycle actions should move behind the planned Platform API/BFF with explicit authentication, authorization, validation, and audit controls. Raw webhook execution data can include request headers, so execution-data retention and secret exposure must be reviewed before any broader deployment.
+### 7. n8n Runtime Configuration Warnings
 
----
-
-## MSc Thesis Direction
-
-The platform is being evolved into an MSc thesis artifact titled:
-
-**Evaluating Adaptive Anomaly Detection and Cross-Source Reconciliation for Operational FX Market Data Quality**
-
-The research layer remains separate from current runtime claims.
-
-### Research Question 1
-
-> **Does temporally aligned cross-source evidence improve the classification of injected source-specific data-quality faults in FX market data compared with single-source monitoring?**
-
-### Research Question 2
-
-> **How does adaptive statistical anomaly detection compare with an equivalent fixed statistical baseline under changing reference FX market conditions and controlled price/spread faults?**
-
-### Core Research Boundaries
-
-- Cross-source disagreement is **contextual evidence, not ground truth**.
-- Ground truth comes from **controlled fault injection**.
-- Non-injected historical observations are **reference observations**, not assumed universally fault-free.
-- Structural validity remains deterministic.
-- Freshness/staleness remains an operational policy.
-- The fixed-versus-adaptive statistical comparison focuses primarily on:
-  - spread
-  - price movement
-- The primary adaptive approach is a past-only rolling median/MAD detector.
-- The fixed baseline uses equivalent robust statistics calibrated chronologically and frozen before evaluation.
-- Random row-level train/test splitting is not used for the main time-series experiment.
-- Calibration → protocol/config freeze → chronological held-out evaluation.
-- Reconciliation must explicitly define:
-  - causal vs symmetric matching
-  - maximum tolerance
-  - tie handling
-  - one-to-one vs reusable matching
-  - unmatched behaviour
-  - provider age
-  - match coverage/confidence
-- Operational claims must not use future look-ahead.
-- Historical files must not be assigned fabricated live arrival-time semantics.
-
-### 2×2 Experimental Design
-
-| | Single-source | Cross-source |
-|---|---|---|
-| Fixed | System A | System C |
-| Adaptive | System B | System D |
-
-### Research Data
-
-The thesis has a zero-cost research-data requirement.
-
-**TrueFX and Dukascopy remain candidate sources only.**
-
-The final pair will be accepted only after a five-day EUR/USD compatibility pilot verifies:
-
-- source schema
-- timestamp semantics
-- UTC normalization feasibility
-- bid/ask validity
-- duplicate behaviour
-- overlapping market coverage
-- temporal matching feasibility
-- natural midpoint divergence
-- natural spread divergence
-- data-use suitability
-
-A negative pilot result is valid and may lead to selection of another research-suitable zero-cost pair.
+The current n8n image reports configuration deprecation/task-runner warnings. Current JavaScript workflows remain operational, but production hardening should remove deprecated configuration and define runner behavior explicitly before relying on it at larger scale.
 
 ---
 
-## Engineering and Research Independence
+## Engineering Independence
 
 The platform is provider-neutral and institution-independent.
 
-Technology selection is based on:
+Technology or architecture choices should be justified by:
 
-- concrete responsibility
-- simpler alternative
-- measurable success criterion
-- verification plan
+- a concrete problem
+- a clear responsibility
+- the simplest viable alternative
+- measurable success criteria
+- a verification plan
 - dependency order
-- actual evidence
+- actual implementation evidence
 
-Public industry documentation may inform general engineering patterns, but it is not a design authority and does not prove any proprietary architecture.
+No technology enters the core solely because it is popular, appears in an employer stack, or looks useful on a technology list.
 
 ---
 
 ## Development Roadmap
 
-The current engineering order remains:
+The current engineering sequence is:
 
 ```text
-Lifecycle Manager [TESTED]
-      ↓
 Configuration-driven rules + reference data
       ↓
 Provider abstraction
       ↓
-Second source
+Second independent source
       ↓
-Temporal reconciliation
+Temporal cross-source reconciliation
       ↓
-Research core
+Replay / deterministic evaluation / fault-injection tooling
       ↓
-Observability / BFF / productisation
+Observability + Platform API/BFF + operator console
       ↓
-Extended streaming, analytics, resilience, security and platform labs
+Provider intelligence
+      ↓
+Extended streaming, analytics, resilience, security, and platform capabilities
 ```
 
-### 1. Lifecycle Manager — TESTED
+### 1. Configuration-Driven Rules and Reference Data — NEXT
 
-Verified scope includes:
+Planned scope:
 
-- authenticated operator action input
-- anomaly/action validation
-- legal transition enforcement
-- `open → acknowledged → resolved`
-- acknowledgement/resolution timestamp handling
-- required resolution reason for `resolve`
-- deterministic HTTP success/failure coverage
-- optimistic-concurrency stale-write protection
-- atomic lifecycle audit persistence
-- database inspection
-- isolated fresh-bootstrap verification
-- controlled fixture cleanup
-- workflow export and secret-pattern inspection
-
-### 2. Configuration and Reference Data — NEXT
-
-- configuration-driven instruments
+- externalized instrument configuration
 - versioned operational thresholds
 - severity-specific threshold provenance
-- effective-dated canonical/provider mappings
-- explicit provider instrument semantics
+- explicit rule identifiers and versions
+- canonical instrument reference data
+- provider-specific instrument mappings
+- effective-dated mappings
+- explicit timestamp/provenance policy
 
-### 3. Provider Abstraction
+### 2. Provider Abstraction
 
-- provider-neutral contracts
+Planned scope:
+
+- provider-neutral ingestion contract
 - source-specific adapters
-- source-safe quote history semantics
-- provider health
+- provider-specific validation boundaries
+- source-safe historical lookup semantics
+- provider metadata and health evidence
 
-### 4. Second Source and Temporal Reconciliation
+### 3. Second Independent Source
 
-- second compatible provider/source
-- temporal alignment
-- causal matching policy
-- divergence evidence
-- coverage / unmatched metrics
+A second provider/source must be integrated through the provider boundary rather than duplicated workflow logic.
 
-Do not describe two-source ingestion as reconciliation until temporal comparison exists.
+### 4. Temporal Cross-Source Reconciliation
 
-### 5. Research Core
+Reconciliation must explicitly define:
 
-- dataset compatibility pilot
-- Python adapters
-- canonical research representation
-- fixed robust baseline
-- rolling median/MAD adaptive detector
-- deterministic fault injection
-- 2×2 experiment
-- leakage-safe chronological evaluation
-- statistical analysis and sensitivity reporting
+- matching direction
+- time tolerance
+- tie handling
+- event reuse policy
+- unmatched behavior
+- provider age
+- coverage metrics
+- confidence/evidence semantics
+
+Two-source ingestion alone is not reconciliation.
+
+### 5. Replay and Deterministic Evaluation
+
+Planned capabilities:
+
+- deterministic replay
+- controlled fault injection
+- versioned datasets/configuration
+- repeatable quality checks
+- comparison of monitoring policies
+- reproducible evidence manifests
 
 ### 6. Observability and Product Boundary
 
-- Prometheus / Grafana
-- OpenTelemetry path
-- Platform API / BFF
+Planned capabilities:
+
+- metrics and dashboards
+- distributed tracing where justified
+- structured operational logs
+- Platform API/BFF
+- typed contracts
 - React/TypeScript console
-- typed APIs/contracts
 - role-controlled operator actions
 
-### 7. Extended Platform
+### 7. Provider Intelligence
 
-Only after simpler verified baselines justify them:
+Planned capabilities:
+
+- provider scorecards
+- SLA/availability evidence
+- temporal coverage metrics
+- certification and migration assurance
+- configuration replay/change assurance
+- lineage and blast-radius evidence
+
+### 8. Extended Platform
+
+Only after simpler verified baselines justify the added complexity:
 
 - Kafka / Schema Registry / Kafka Connect
 - Flink
 - ClickHouse
+- Redis / MongoDB where justified
 - MinIO / Parquet / Iceberg
 - Spark / Trino / dbt
-- Redis / MongoDB where justified
 - Temporal / Airflow
-- C++ replay
-- Kubernetes / Helm / Argo CD
+- high-performance replay components where measured need exists
+- Kubernetes / Helm / GitOps
 - Vault / OIDC / fine-grained authorization
-- progressive delivery / autoscaling
-- load / chaos / recovery labs
-- advanced observability
-- developer portal / governance
-- experiment registry / dataset versioning
-- optional advisory AIOps
+- autoscaling and progressive delivery
+- load, failure, chaos, recovery, and DR exercises
+- advanced observability and profiling
+- developer-platform and governance capabilities
+- governed advisory automation where justified
 
 ---
 
@@ -1239,38 +1365,14 @@ A milestone is complete only when:
 
 1. implementation exists
 2. key success and failure paths are tested
-3. relevant runtime/database/log/metric/trace/container/browser evidence is inspected
-4. temporary test artifacts are cleaned
-5. `git diff` / `git status` and secret checks are inspected
+3. relevant runtime, database, log, metric, trace, container, or browser evidence is inspected
+4. destructive or temporary test artifacts are cleaned
+5. `git diff`, `git status`, and secret checks are inspected
 6. committed `HEAD` equals the tested state
-7. push is confirmed
-8. documentation/checkpoint agrees with that exact state
+7. push is confirmed when the milestone is intended to be shared
+8. current repository documentation agrees with the committed behavior
 
-If those conditions are not satisfied, the capability remains at a lower status.
-
----
-
-## Checkpoint and Source-of-Truth Discipline
-
-For implementation status, stronger evidence wins:
-
-```text
-Runtime / inspected execution evidence
-        >
-Committed repository HEAD / verified checkpoint
-        >
-Current technical guide
-        >
-MSc proposal for research goals and planned architecture
-        >
-older documents/history
-```
-
-The MSc proposal does **not** upgrade runtime status.
-
-The Part-02 checkpoint is historical committed evidence and should not be rewritten merely because later documentation or research framing changes.
-
-Current repository HEAD/push state beyond the verified checkpoint must be re-checked when development resumes.
+If these conditions are not satisfied, the capability remains at a lower status.
 
 ---
 
@@ -1278,6 +1380,4 @@ Current repository HEAD/push state beyond the verified checkpoint must be re-che
 
 > **Implement configuration-driven rules and reference data.**
 
-The next block should externalize operational thresholds, preserve severity/configuration provenance, define effective-dated instrument/provider mappings, and make provider instrument semantics explicit before provider abstraction and second-source work.
-
-The Lifecycle Manager capability itself is runtime **TESTED**. Overall milestone completion still follows the project Definition of Done, including committed/pushed tested state and synchronized Guide/checkpoint documentation.
+The next engineering block should externalize operational thresholds, preserve rule/severity/configuration provenance, define canonical and provider-specific instrument mappings, and establish explicit temporal/reference semantics before provider abstraction and second-source integration.
