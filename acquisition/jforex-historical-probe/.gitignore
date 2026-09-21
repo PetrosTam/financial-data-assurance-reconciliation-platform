@@ -1,0 +1,21 @@
+# Maven / Java build outputs
+/target/
+/out/
+*.class
+
+# Runtime logs and JVM crash artifacts
+/logs/
+*.log
+hs_err_pid*
+replay_pid*
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+
+# Incomplete acquisition artifacts
+*.part
+
+# Dukascopy raw/cache data artifacts
+*.bi5

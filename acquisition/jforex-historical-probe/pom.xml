@@ -1,0 +1,91 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.petros.thesis</groupId>
+  <artifactId>jforex-historical-probe</artifactId>
+  <version>1.0.0</version>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>8</maven.compiler.release>
+
+    <dukascopy.sdk.version>3.6.51</dukascopy.sdk.version>
+
+    <!--
+      Required research-run parameters deliberately use sentinel values.
+      A plain "mvn exec:exec" must fail fast rather than silently requesting
+      an unintended historical interval.
+    -->
+    <probe.instrument>__REQUIRED__</probe.instrument>
+    <probe.from>__REQUIRED__</probe.from>
+    <probe.to>__REQUIRED__</probe.to>
+
+    <!-- Safe operational defaults. -->
+    <probe.output.root>out/runs</probe.output.root>
+    <probe.timeout.ms>120000</probe.timeout.ms>
+  </properties>
+
+  <repositories>
+    <repository>
+      <id>dukascopy-public</id>
+      <name>Dukascopy public repository</name>
+      <url>https://www.dukascopy.com/client/jforexlib/publicrepo/</url>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.dukascopy.dds2</groupId>
+      <artifactId>DDS2-jClient-JForex</artifactId>
+      <version>${dukascopy.sdk.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
+
+        <configuration>
+
+          <!--
+            JForex runs in a dedicated child JVM.
+            This preserves the already-tested isolation from third-party
+            SDK transport threads.
+          -->
+          <executable>java</executable>
+
+          <arguments>
+
+            <!-- Preserve SDK version provenance inside metadata.json. -->
+            <argument>-Ddukascopy.sdk.version=${dukascopy.sdk.version}</argument>
+
+            <!-- Maven-computed project/dependency classpath. -->
+            <argument>-classpath</argument>
+            <classpath/>
+
+            <!-- Application entry point. -->
+            <argument>com.petros.thesis.jforex.Main</argument>
+
+            <!-- Explicit research-run configuration. -->
+            <argument>--instrument=${probe.instrument}</argument>
+            <argument>--from=${probe.from}</argument>
+            <argument>--to=${probe.to}</argument>
+            <argument>--output-root=${probe.output.root}</argument>
+            <argument>--probe-timeout-ms=${probe.timeout.ms}</argument>
+
+          </arguments>
+
+        </configuration>
+      </plugin>
+
+    </plugins>
+  </build>
+
+</project>
