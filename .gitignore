@@ -13,8 +13,9 @@ venv/
 # Node.js
 node_modules/
 
-# IDEs
+# IDEs and editors
 .idea/
+.vscode/
 
 # Logs
 *.log
