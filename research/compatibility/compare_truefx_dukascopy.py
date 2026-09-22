@@ -56,12 +56,12 @@ import json
 import math
 import platform
 import re
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, getcontext
 from pathlib import Path
-from typing import Callable, Sequence, TypeVar, overload
-
+from typing import TypeVar, overload
 
 getcontext().prec = 28
 
@@ -107,7 +107,7 @@ class Quote:
 
     @property
     def mid(self) -> Decimal:
-        return (self.bid + self.ask) / Decimal("2")
+        return (self.bid + self.ask) / Decimal(2)
 
     @property
     def spread(self) -> Decimal:
@@ -116,7 +116,7 @@ class Quote:
     @property
     def spread_bps(self) -> Decimal:
         # Input validation guarantees mid > 0.
-        return (self.spread / self.mid) * Decimal("10000")
+        return (self.spread / self.mid) * Decimal(10000)
 
 
 @dataclass(frozen=True)
@@ -223,13 +223,18 @@ def fmt_utc_ms(epoch_ms: int) -> str:
 
 def parse_truefx_timestamp(raw_value: str) -> int:
     if TRUEFX_TIMESTAMP_PATTERN.fullmatch(raw_value) is None:
-        raise ValueError("timestamp must match YYYYMMDD HH:MM:SS.mmm exactly")
+        raise ValueError(
+            "timestamp must match YYYYMMDD HH:MM:SS.mmm exactly"
+        )
 
-    naive = datetime.strptime(raw_value, TRUEFX_TIMESTAMP_FORMAT)
+    parsed = datetime.strptime(
+        raw_value,
+        TRUEFX_TIMESTAMP_FORMAT,
+    ).replace(tzinfo=UTC)
 
     # Protocol assumption: the offset-free TrueFX archive timestamp is treated
     # as UTC-equivalent for this pilot. The raw row itself contains no offset.
-    return datetime_to_epoch_ms(naive.replace(tzinfo=UTC))
+    return datetime_to_epoch_ms(parsed)
 
 
 def parse_dukascopy_event_time(raw_value: str) -> int:
@@ -238,8 +243,12 @@ def parse_dukascopy_event_time(raw_value: str) -> int:
             "event_time_utc must match YYYY-MM-DDTHH:MM:SS.mmmZ exactly"
         )
 
-    parsed = datetime.strptime(raw_value, DUKASCOPY_EVENT_TIME_FORMAT)
-    return datetime_to_epoch_ms(parsed.replace(tzinfo=UTC))
+    parsed = datetime.strptime(
+        raw_value,
+        DUKASCOPY_EVENT_TIME_FORMAT,
+    ).replace(tzinfo=UTC)
+
+    return datetime_to_epoch_ms(parsed)
 
 
 def parse_finite_decimal(raw_value: str, context: str) -> Decimal:
@@ -330,7 +339,7 @@ def nearest_rank_percentile(
 def decimal_mean(values: Sequence[Decimal]) -> Decimal | None:
     if not values:
         return None
-    return sum(values, Decimal("0")) / Decimal(len(values))
+    return sum(values, Decimal(0)) / Decimal(len(values))
 
 
 def decimal_to_float(value: Decimal | None) -> float | None:
@@ -890,11 +899,11 @@ def price_diagnostics(
         monitored_quote = monitored[match.monitored_index]
         peer_quote = peers[match.peer_index]
 
-        reference_mid = (monitored_quote.mid + peer_quote.mid) / Decimal("2")
+        reference_mid = (monitored_quote.mid + peer_quote.mid) / Decimal(2)
         mid_divergence = (
             (monitored_quote.mid - peer_quote.mid)
             / reference_mid
-            * Decimal("10000")
+            * Decimal(10000)
         )
         spread_divergence = monitored_quote.spread_bps - peer_quote.spread_bps
 
