@@ -4,13 +4,13 @@ import hashlib
 import math
 import re
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from itertools import pairwise
 from pathlib import Path
 from statistics import median
-from typing import Sequence
-
 
 EXPECTED_INSTRUMENT = "EUR/USD"
 EXPECTED_COLUMN_COUNT = 4
@@ -151,7 +151,10 @@ def parse_source_timestamp(
             "YYYYMMDD HH:MM:SS.mmm exactly"
         )
 
-    parsed = datetime.strptime(
+    # TrueFX archive rows contain no explicit timezone offset. Keeping this
+    # source timestamp naive is intentional so this structural audit does not
+    # invent timezone semantics that are absent from the source evidence.
+    parsed = datetime.strptime( # noqa: DTZ007
         raw_value,
         TIMESTAMP_FORMAT,
     )
@@ -597,10 +600,7 @@ def print_continuity_report(
                 previous,
                 current,
             )
-            for previous, current in zip(
-                timestamps,
-                timestamps[1:],
-            )
+            for previous, current in pairwise(timestamps)
         ]
 
         print()
@@ -770,8 +770,7 @@ def print_audit_summary(
             ),
         ),
         (
-            "All 1000 millisecond "
-            "positions observed",
+            "All 1000 millisecond positions observed",
             (
                 len(
                     state.millisecond_positions
